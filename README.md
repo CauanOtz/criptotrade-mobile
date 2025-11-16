@@ -1,0 +1,1 @@
+criptotrade-mobile
