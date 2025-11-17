@@ -36,13 +36,13 @@ const styles = StyleSheet.create({
   link: {
     paddingVertical: 15,
     paddingHorizontal: 30,
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(234, 179, 8, 0.12)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: 'rgba(234, 179, 8, 0.18)',
   },
   linkText: {
-    color: '#3b82f6',
+    color: '#eab308',
     fontSize: 16,
     fontWeight: '600',
   },

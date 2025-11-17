@@ -22,7 +22,7 @@ export default function TabLayout() {
             style={StyleSheet.absoluteFill}
           />
         ),
-        tabBarActiveTintColor: '#3b82f6',
+        tabBarActiveTintColor: '#eab308',
         tabBarInactiveTintColor: '#64748b',
         tabBarLabelStyle: {
           fontSize: 12,

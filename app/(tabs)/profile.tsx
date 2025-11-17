@@ -6,6 +6,7 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +24,6 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -35,7 +35,7 @@ export default function ProfileScreen() {
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 15 });
+    scale.value = withTiming(1, { duration: 400 });
     opacity.value = withTiming(1, { duration: 600 });
   }, []);
 
@@ -52,7 +52,7 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0f172a', '#1e293b', '#334155']}
+        colors={['#000000ff', '#222222ff', '#363636ff']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -68,7 +68,11 @@ export default function ProfileScreen() {
             <GlassContainer style={styles.profileCard}>
               <View style={styles.avatarContainer}>
                 <View style={styles.avatar}>
-                  <User size={40} color="#3b82f6" />
+                  {user?.photo ? (
+                    <Image source={{ uri: user.photo }} style={styles.avatarImage} />
+                  ) : (
+                    <User size={40} color="#eab308" />
+                  )}
                 </View>
               </View>
 
@@ -86,19 +90,22 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Configurações</Text>
 
             <MenuItem
-              icon={<Settings size={22} color="#3b82f6" />}
+              icon={<Settings size={22} color="#eab308" />}
               title="Configurações Gerais"
               delay={100}
+              onPress={() => router.push('/settings')}
             />
             <MenuItem
-              icon={<Bell size={22} color="#3b82f6" />}
+              icon={<Bell size={22} color="#eab308" />}
               title="Notificações"
               delay={200}
+              onPress={() => router.push('/notifications')}
             />
             <MenuItem
-              icon={<Shield size={22} color="#3b82f6" />}
+              icon={<Shield size={22} color="#eab308" />}
               title="Segurança"
               delay={300}
+              onPress={() => router.push('/security')}
             />
           </View>
 
@@ -107,9 +114,11 @@ export default function ProfileScreen() {
             onPress={handleSignOut}
             activeOpacity={0.7}
           >
-            <GlassContainer style={styles.logoutContent}>
-              <LogOut size={22} color="#ef4444" />
-              <Text style={styles.logoutText}>Sair da Conta</Text>
+            <GlassContainer>
+              <View style={styles.logoutContent}>
+                <LogOut size={22} color="#ef4444" />
+                <Text style={styles.logoutText}>Sair da Conta</Text>
+              </View>
             </GlassContainer>
           </TouchableOpacity>
 
@@ -124,15 +133,16 @@ interface MenuItemProps {
   icon: React.ReactNode;
   title: string;
   delay?: number;
+  onPress?: () => void;
 }
 
-function MenuItem({ icon, title, delay = 0 }: MenuItemProps) {
+function MenuItem({ icon, title, delay = 0, onPress }: MenuItemProps) {
   const opacity = useSharedValue(0);
   const translateX = useSharedValue(-20);
 
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 400 });
-    translateX.value = withSpring(0, { damping: 15 });
+    translateX.value = withTiming(0, { duration: 300 });
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -141,9 +151,10 @@ function MenuItem({ icon, title, delay = 0 }: MenuItemProps) {
   }));
 
   const handlePress = () => {
-    translateX.value = withSpring(-5, { damping: 10 }, () => {
-      translateX.value = withSpring(0, { damping: 10 });
+    translateX.value = withTiming(-5, { duration: 120 }, () => {
+      translateX.value = withTiming(0, { duration: 160 });
     });
+    if (onPress) onPress();
   };
 
   return (
@@ -153,12 +164,14 @@ function MenuItem({ icon, title, delay = 0 }: MenuItemProps) {
         onPress={handlePress}
         activeOpacity={0.7}
       >
-        <GlassContainer style={styles.menuItemContent}>
-          <View style={styles.menuItemLeft}>
-            <View style={styles.iconContainer}>{icon}</View>
-            <Text style={styles.menuItemTitle}>{title}</Text>
+        <GlassContainer>
+          <View style={styles.menuItemContent}>
+            <View style={styles.menuItemLeft}>
+              <View style={styles.iconContainer}>{icon}</View>
+              <Text style={styles.menuItemTitle}>{title}</Text>
+            </View>
+            <ChevronRight size={20} color="#64748b" />
           </View>
-          <ChevronRight size={20} color="#64748b" />
         </GlassContainer>
       </TouchableOpacity>
     </Animated.View>
@@ -196,11 +209,17 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(234, 179, 8, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: 'rgba(234, 179, 8, 0.22)',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   userName: {
     fontSize: 24,
@@ -238,20 +257,23 @@ const styles = StyleSheet.create({
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
   },
   iconContainer: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    backgroundColor: 'rgba(234, 179, 8, 0.06)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconSpacing: {
+    marginRight: 12,
   },
   menuItemTitle: {
     fontSize: 16,
     fontWeight: '500',
     color: '#ffffff',
+    marginLeft: 4,
   },
   logoutButton: {
     marginTop: 8,

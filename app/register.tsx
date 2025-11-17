@@ -13,60 +13,59 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { GlassContainer } from '@/components/GlassContainer';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
-import { Lock, Mail } from 'lucide-react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { Mail, Lock, User } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { signIn, user } = useAuth();
+  const { signUp, user } = useAuth();
 
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
-  const translateY = useSharedValue(50);
 
   useEffect(() => {
-    if (user) {
-      router.replace('/(tabs)');
-    }
+    if (user) router.replace('/(tabs)');
   }, [user]);
 
   useEffect(() => {
     scale.value = withTiming(1, { duration: 400 });
     opacity.value = withTiming(1, { duration: 800 });
-    translateY.value = withTiming(0, { duration: 400 });
   }, []);
 
   const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }, { translateY: translateY.value }],
+    transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Por favor preencha todos os campos');
+  const handleRegister = async () => {
+    if (!name || !email || !password || !confirm) {
+      setError('Preencha todos os campos');
+      return;
+    }
+    if (password !== confirm) {
+      setError('As senhas não coincidem');
       return;
     }
 
     setLoading(true);
     setError('');
-    const { error } = await signIn(email, password);
-
+    const { error } = await signUp(email, password, name);
     if (error) {
-      setError(error.message);
+      setError(error.message ?? 'Erro ao cadastrar');
       setLoading(false);
+      return;
     }
+
+    // After successful register, navigate to login
+    router.replace('/login');
   };
 
   return (
@@ -76,17 +75,26 @@ export default function LoginScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      <FloatingCircles />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <Animated.View style={[styles.content, containerStyle]}>
-          <Text style={styles.title}>Bem-vindo</Text>
-          <Text style={styles.subtitle}>Entre para acessar seu dashboard</Text>
+          <Text style={styles.title}>Crie sua conta</Text>
+          <Text style={styles.subtitle}>Cadastre-se para começar a usar o app</Text>
 
           <GlassContainer style={styles.formContainer}>
+            <View style={styles.inputContainer}>
+              <User color="#94a3b8" size={20} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Nome"
+                placeholderTextColor="#64748b"
+                value={name}
+                onChangeText={setName}
+              />
+            </View>
+
             <View style={styles.inputContainer}>
               <Mail color="#94a3b8" size={20} style={styles.inputIcon} />
               <TextInput
@@ -112,11 +120,23 @@ export default function LoginScreen() {
               />
             </View>
 
+            <View style={styles.inputContainer}>
+              <Lock color="#94a3b8" size={20} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Confirmar senha"
+                placeholderTextColor="#64748b"
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry
+              />
+            </View>
+
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleLogin}
+              onPress={handleRegister}
               disabled={loading}
             >
               <LinearGradient
@@ -125,89 +145,20 @@ export default function LoginScreen() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Text style={styles.buttonText}>
-                  {loading ? 'Entrando...' : 'Entrar'}
-                </Text>
+                <Text style={styles.buttonText}>{loading ? 'Criando...' : 'Criar conta'}</Text>
               </LinearGradient>
             </TouchableOpacity>
+
             <View style={styles.row}>
-              <Text style={styles.smallText}>Não tem conta?</Text>
-              <TouchableOpacity onPress={() => router.push('/register') }>
-                <Text style={styles.linkText}> Cadastre-se</Text>
+              <Text style={styles.smallText}>Já tem conta?</Text>
+              <TouchableOpacity onPress={() => router.push('/login' as any)}>
+                <Text style={styles.linkText}> Entrar</Text>
               </TouchableOpacity>
             </View>
           </GlassContainer>
         </Animated.View>
       </KeyboardAvoidingView>
     </View>
-  );
-}
-
-function FloatingCircles() {
-  const circles = [1, 2, 3, 4];
-
-  return (
-    <>
-      {circles.map((_, index) => (
-        <FloatingCircle key={index} index={index} />
-      ))}
-    </>
-  );
-}
-
-function FloatingCircle({ index }: { index: number }) {
-  const translateY = useSharedValue(0);
-  const translateX = useSharedValue(0);
-
-  useEffect(() => {
-    const delay = index * 300;
-    translateY.value = withRepeat(
-      withSequence(
-        withTiming(20, { duration: 2000 + index * 500 }),
-        withTiming(-20, { duration: 2000 + index * 500 })
-      ),
-      -1,
-      true
-    );
-    translateX.value = withRepeat(
-      withSequence(
-        withTiming(15, { duration: 2500 + index * 300 }),
-        withTiming(-15, { duration: 2500 + index * 300 })
-      ),
-      -1,
-      true
-    );
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { translateX: translateX.value },
-    ],
-  }));
-
-  const positions = [
-    { top: height * 0.1, left: width * 0.1 },
-    { top: height * 0.3, right: width * 0.1 },
-    { bottom: height * 0.2, left: width * 0.2 },
-    { bottom: height * 0.1, right: width * 0.15 },
-  ];
-
-  const sizes = [120, 80, 100, 90];
-
-  return (
-    <Animated.View
-      style={[
-        styles.floatingCircle,
-        {
-          width: sizes[index],
-          height: sizes[index],
-          borderRadius: sizes[index] / 2,
-          ...positions[index],
-        },
-        animatedStyle,
-      ]}
-    />
   );
 }
 
@@ -223,20 +174,20 @@ const styles = StyleSheet.create({
   },
   content: {
     width: width * 0.9,
-    maxWidth: 400,
+    maxWidth: 420,
     alignItems: 'center',
   },
   title: {
-    fontSize: 42,
+    fontSize: 36,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#94a3b8',
-    marginBottom: 40,
+    marginBottom: 24,
     textAlign: 'center',
   },
   formContainer: {
@@ -245,19 +196,19 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 16,
+    height: 56,
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
-    height: 56,
     color: '#ffffff',
     fontSize: 16,
   },
@@ -271,24 +222,19 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonGradient: {
-    paddingVertical: 18,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   buttonText: {
     color: '#071124',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   errorText: {
     color: '#ef4444',
     fontSize: 14,
-    marginBottom: 12,
+    marginBottom: 8,
     textAlign: 'center',
-  },
-  floatingCircle: {
-    position: 'absolute',
-    backgroundColor: 'rgba(234, 179, 8, 0.08)',
-    opacity: 0.9,
   },
   row: {
     flexDirection: 'row',

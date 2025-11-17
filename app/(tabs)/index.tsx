@@ -7,11 +7,13 @@ import {
   SafeAreaView,
   RefreshControl,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PortfolioSummary } from '@/components/PortfolioSummary';
 import { CryptoCard } from '@/components/CryptoCard';
+import CoinPicker from '@/components/CoinPicker';
 import { Crypto } from '@/types/crypto';
 import Animated, {
   useSharedValue,
@@ -68,6 +70,8 @@ const mockCryptos: Crypto[] = [
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const [selected, setSelected] = useState(mockCryptos[0]);
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [cryptos, setCryptos] = useState<Crypto[]>(mockCryptos);
 
@@ -85,7 +89,7 @@ export default function DashboardScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0f172a', '#1e293b', '#334155']}
+        colors={['#000000ff', '#222222ff', '#363636ff']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -100,7 +104,7 @@ export default function DashboardScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#3b82f6"
+              tintColor="#eab308"
             />
           }
         >
@@ -119,12 +123,53 @@ export default function DashboardScreen() {
             totalInvested={totalInvested}
           />
 
+          <View style={{ marginTop: 20, marginBottom: 12 }}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setPickerVisible(true)}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View>
+                  <Text style={{ color: '#94a3b8', fontSize: 12 }}>Moeda selecionada</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 18 }}>{selected?.symbol} — {selected?.name}</Text>
+                </View>
+                <Text style={{ color: '#eab308', fontWeight: '700' }}>Trocar</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Principais Criptomoedas</Text>
             {cryptos.map((crypto, index) => (
-              <CryptoCard key={crypto.id} crypto={crypto} index={index} />
+              <CryptoCard
+                key={crypto.id}
+                crypto={crypto}
+                index={index}
+                onPress={() => {
+                  setSelected(crypto);
+                }}
+              />
             ))}
           </View>
+
+          <CoinPicker
+            visible={pickerVisible}
+            onClose={() => setPickerVisible(false)}
+            coins={cryptos}
+            onSelect={c =>
+              setSelected({
+                id: c.id,
+                name: c.name,
+                symbol: c.symbol,
+                price: c.price,
+                change24h: 0,
+                marketCap: 0,
+                volume24h: 0,
+                image: '',
+              })
+            }
+          />
 
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -194,14 +239,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    padding: 24,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
-    marginTop: 20,
+    marginBottom: 28,
+    marginTop: 16,
   },
   greeting: {
     fontSize: 16,
@@ -224,6 +269,6 @@ const styles = StyleSheet.create({
   },
   floatingShape: {
     position: 'absolute',
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    backgroundColor: 'rgba(234, 179, 8, 0.06)',
   },
 });

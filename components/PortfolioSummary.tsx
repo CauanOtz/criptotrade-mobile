@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { GlassContainer } from './GlassContainer';
 import { TrendingUp, Wallet, DollarSign } from 'lucide-react-native';
 import Animated, {
@@ -9,6 +9,8 @@ import Animated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
+import { useAuth } from '@/contexts/AuthContext';
+import { walletApi, marketApi } from '@/lib/apiClient';
 
 interface PortfolioSummaryProps {
   totalValue: number;
@@ -16,16 +18,80 @@ interface PortfolioSummaryProps {
   totalInvested: number;
 }
 
-export function PortfolioSummary({
-  totalValue,
-  change24h,
-  totalInvested,
-}: PortfolioSummaryProps) {
+export function PortfolioSummary({ refreshToggle = 0 }: { refreshToggle?: number }) {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [totalValue, setTotalValue] = useState<number>(0);
+  const [totalInvested, setTotalInvested] = useState<number>(0);
+  const [change24h, setChange24h] = useState<number>(0);
+
+  const fetchPortfolio = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await walletApi.getuserWallets(user.id);
+      const wallets = res.data || [];
+
+      // Fetch all tickers once to avoid multiple network calls
+      const tickersRes = await marketApi.getAllTickers();
+      const tickers = tickersRes.data || [];
+      const priceMap: Record<string, number> = {};
+      for (const t of tickers) {
+        const s = (t.symbol || t.pair || '').toString().toUpperCase();
+        const p = Number(t.price ?? 0);
+        if (s) priceMap[s] = p;
+      }
+
+      // Attempt to compute totals from returned wallets.
+      // Common shapes: wallet.balance (number) or wallet.holdings [{ symbol, amount, invested }]
+      let tv = 0;
+      let invested = 0;
+      let changeAcc = 0;
+
+      for (const w of wallets) {
+        if (typeof w.balance === 'number') {
+          tv += w.balance;
+        }
+        if (Array.isArray(w.holdings)) {
+          for (const h of w.holdings) {
+            const amount = Number(h.amount || 0);
+            const investedAmount = Number(h.invested || 0);
+            const symbol = (h.symbol || h.asset || '').toString().toUpperCase();
+            invested += investedAmount;
+            const price = priceMap[symbol] ?? 0;
+            if (price > 0) {
+              const current = amount * price;
+              tv += current;
+              changeAcc += current - investedAmount;
+            } else {
+              tv += investedAmount;
+            }
+          }
+        }
+      }
+
+      setTotalValue(tv || 0);
+      setTotalInvested(invested || 0);
+      setChange24h(((changeAcc / (invested || 1)) * 100) || 0);
+    } catch (err: any) {
+      Alert.alert('Erro', 'Não foi possível carregar o portfólio');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, [fetchPortfolio, refreshToggle]);
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 15 });
+    // Use timing instead of spring to avoid bounce when the screen reloads
+    scale.value = withTiming(1, { duration: 400 });
     opacity.value = withTiming(1, { duration: 600 });
   }, []);
 
@@ -71,7 +137,7 @@ export function PortfolioSummary({
 
         <View style={styles.stats}>
           <StatItem
-            icon={<Wallet size={18} color="#3b82f6" />}
+            icon={<Wallet size={18} color="#eab308" />}
             label="Investido"
             value={`$${totalInvested.toLocaleString('pt-BR')}`}
             delay={200}
@@ -102,8 +168,9 @@ function StatItem({ icon, label, value, valueColor, delay = 0 }: StatItemProps) 
   const translateX = useSharedValue(-20);
 
   useEffect(() => {
+    // Slide in without spring bounce
     opacity.value = withDelay(delay, withTiming(1, { duration: 400 }));
-    translateX.value = withDelay(delay, withSpring(0, { damping: 15 }));
+    translateX.value = withDelay(delay, withTiming(0, { duration: 350 }));
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -169,7 +236,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    backgroundColor: 'rgba(234, 179, 8, 0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },

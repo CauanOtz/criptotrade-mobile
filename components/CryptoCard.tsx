@@ -1,27 +1,29 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { GlassContainer } from './GlassContainer';
+import Sparkline from './Sparkline';
 import { TrendingUp, TrendingDown } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { Crypto } from '@/types/crypto';
+import * as Haptics from 'expo-haptics';
 
 interface CryptoCardProps {
   crypto: Crypto;
   index: number;
+  onPress?: () => void;
 }
 
-export function CryptoCard({ crypto, index }: CryptoCardProps) {
+export function CryptoCard({ crypto, index, onPress }: CryptoCardProps) {
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
     setTimeout(() => {
-      scale.value = withSpring(1, { damping: 15 });
+      scale.value = withTiming(1, { duration: 400 });
       opacity.value = withTiming(1, { duration: 400 });
     }, index * 100);
   }, []);
@@ -31,17 +33,42 @@ export function CryptoCard({ crypto, index }: CryptoCardProps) {
     opacity: opacity.value,
   }));
 
-  const handlePress = () => {
-    scale.value = withSpring(0.95, { damping: 10 }, () => {
-      scale.value = withSpring(1, { damping: 10 });
+  const handlePress = async () => {
+    try {
+      await Haptics.selectionAsync();
+    } catch (e) {
+      // ignore if haptics not available
+    }
+    scale.value = withTiming(0.95, { duration: 120 }, () => {
+      scale.value = withTiming(1, { duration: 140 });
     });
+    if (onPress) onPress();
   };
 
   const isPositive = crypto.change24h >= 0;
 
+  // generate simple sparkline data based on current price and change24h
+  const generateSpark = (price: number, changePercent: number, points = 12) => {
+    const arr: number[] = [];
+    const start = price / (1 + changePercent / 100);
+    for (let i = 0; i < points; i++) {
+      const t = i / (points - 1);
+      // linear interpolate with small noise
+      const value = start + (price - start) * t + (Math.sin(i * 2 + price) * price * 0.002);
+      arr.push(value);
+    }
+    return arr;
+  };
+
+  const sparkData = generateSpark(crypto.price, crypto.change24h);
+
   return (
     <Animated.View style={animatedStyle}>
-      <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={handlePress}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
         <GlassContainer style={styles.container}>
           <View style={styles.header}>
             <View style={styles.cryptoInfo}>
@@ -75,6 +102,8 @@ export function CryptoCard({ crypto, index }: CryptoCardProps) {
             ${crypto.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </Text>
 
+          <Sparkline data={sparkData} width={180} height={48} />
+
           <View style={styles.footer}>
             <View style={styles.stat}>
               <Text style={styles.statLabel}>Cap. Mercado</Text>
@@ -98,6 +127,8 @@ export function CryptoCard({ crypto, index }: CryptoCardProps) {
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
+    marginHorizontal: 4,
+    minHeight: 96,
   },
   header: {
     flexDirection: 'row',

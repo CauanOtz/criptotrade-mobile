@@ -89,7 +89,7 @@ export default function MarketScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0f172a', '#1e293b', '#334155']}
+        colors={['#000000ff', '#222222ff', '#363636ff']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -102,15 +102,17 @@ export default function MarketScreen() {
         </View>
 
         <View style={styles.searchContainer}>
-          <GlassContainer style={styles.searchBox}>
-            <Search color="#64748b" size={20} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar criptomoeda..."
-              placeholderTextColor="#64748b"
-              value={search}
-              onChangeText={setSearch}
-            />
+          <GlassContainer>
+            <View style={styles.searchBox}>
+              <Search color="#64748b" size={20} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar criptomoeda..."
+                placeholderTextColor="#64748b"
+                value={search}
+                onChangeText={setSearch}
+              />
+            </View>
           </GlassContainer>
         </View>
 
