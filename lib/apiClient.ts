@@ -50,6 +50,14 @@ export const walletApi = {
   transferBetweenWallets: (data: any) => api.post('/Wallet/transfer', data),
 };
 
+export const wallet2Api = {
+  getBalances: () => api.get('/balance'),
+  adjustBalance: (assetSymbol: string, deltaAmount: number) =>
+    api.patch(`/balance/${encodeURIComponent(assetSymbol)}`, { DeltaAmount: deltaAmount }),
+  createWallet: () => api.post('/wallet'),
+  getWallet: () => api.get('/wallet'),
+};
+
 export const transactionApi = {
   getAll: () => api.get('/transactions'),
   create: (data: any) => api.post('/transactions', data),

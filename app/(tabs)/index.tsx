@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,16 @@ import {
   RefreshControl,
   Dimensions,
   TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PortfolioSummary } from '@/components/PortfolioSummary';
 import { CryptoCard } from '@/components/CryptoCard';
-import CoinPicker from '@/components/CoinPicker';
 import { Crypto } from '@/types/crypto';
+import { useRouter } from 'expo-router';
+import { marketApi } from '@/lib/apiClient';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -25,66 +28,194 @@ import Animated, {
 
 const { height } = Dimensions.get('window');
 
-const mockCryptos: Crypto[] = [
-  {
-    id: '1',
-    name: 'Bitcoin',
-    symbol: 'BTC',
-    price: 65432.89,
-    change24h: 3.45,
-    marketCap: 1280000000000,
-    volume24h: 45000000000,
-    image: '',
-  },
-  {
-    id: '2',
-    name: 'Ethereum',
-    symbol: 'ETH',
-    price: 3456.78,
-    change24h: -1.23,
-    marketCap: 415000000000,
-    volume24h: 18000000000,
-    image: '',
-  },
-  {
-    id: '3',
-    name: 'Cardano',
-    symbol: 'ADA',
-    price: 0.5678,
-    change24h: 5.67,
-    marketCap: 20000000000,
-    volume24h: 850000000,
-    image: '',
-  },
-  {
-    id: '4',
-    name: 'Solana',
-    symbol: 'SOL',
-    price: 145.32,
-    change24h: 8.91,
-    marketCap: 65000000000,
-    volume24h: 3200000000,
-    image: '',
-  },
+const curatedTokenMeta: Record<string, { name: string; icon: string }> = {
+  BTC: { name: 'Bitcoin', icon: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=032' },
+  ETH: { name: 'Ethereum', icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032' },
+  BNB: { name: 'BNB', icon: 'https://cryptologos.cc/logos/binance-coin-bnb-logo.png?v=032' },
+  XRP: { name: 'XRP', icon: 'https://cryptologos.cc/logos/xrp-xrp-logo.png?v=032' },
+  ADA: { name: 'Cardano', icon: 'https://cryptologos.cc/logos/cardano-ada-logo.png?v=032' },
+  SOL: { name: 'Solana', icon: 'https://cryptologos.cc/logos/solana-sol-logo.png?v=032' },
+  DOGE: { name: 'Dogecoin', icon: 'https://cryptologos.cc/logos/dogecoin-doge-logo.png?v=032' },
+  MATIC: { name: 'Polygon', icon: 'https://cryptologos.cc/logos/polygon-matic-logo.png?v=032' },
+  DOT: { name: 'Polkadot', icon: 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png?v=032' },
+  LTC: { name: 'Litecoin', icon: 'https://cryptologos.cc/logos/litecoin-ltc-logo.png?v=032' },
+  AVAX: { name: 'Avalanche', icon: 'https://cryptologos.cc/logos/avalanche-avax-logo.png?v=032' },
+  SHIB: { name: 'Shiba Inu', icon: 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png?v=032' },
+  ATOM: { name: 'Cosmos', icon: 'https://cryptologos.cc/logos/cosmos-atom-logo.png?v=032' },
+};
+
+const resolveTokenMeta = (symbol: string) => {
+  const upper = symbol.toUpperCase();
+  if (curatedTokenMeta[upper]) return curatedTokenMeta[upper];
+  const cryptoIconsUrl = `https://cryptoicons.org/api/icon/${upper.toLowerCase()}/64`;
+  return {
+    name: upper,
+    icon: cryptoIconsUrl,
+  };
+};
+
+type QuoteFilter = 'ALL' | 'USDT' | 'BTC' | 'STABLE';
+type ChangeFilter = 'ALL' | 'GAINERS' | 'LOSERS';
+
+const quoteSuffixes = [
+  'USDT',
+  'USDC',
+  'BUSD',
+  'TUSD',
+  'USDP',
+  'DAI',
+  'BTC',
+  'ETH',
+  'BNB',
+  'BRL',
+  'EUR',
+  'USD',
+  'TRY',
+  'BIDR',
+  'AUD',
+  'GBP',
+  'ARS',
+];
+
+const usdPeghQuotes = ['USDT', 'USDC', 'BUSD', 'TUSD', 'USDP', 'DAI'];
+const fiatQuotes = ['BRL', 'EUR', 'USD'];
+const stableQuotes = [...usdPeghQuotes, ...fiatQuotes];
+
+const splitSymbol = (symbol: string) => {
+  const upper = symbol.toUpperCase();
+  const match = quoteSuffixes.find(suffix => upper.endsWith(suffix));
+  if (!match) return { base: upper, quote: '' };
+  return {
+    base: upper.slice(0, -match.length) || upper,
+    quote: match,
+  };
+};
+
+const quoteOptions: { label: string; value: QuoteFilter }[] = [
+  { label: 'Todos', value: 'ALL' },
+  { label: 'USDT', value: 'USDT' },
+  { label: 'BTC', value: 'BTC' },
+  { label: 'Stable', value: 'STABLE' },
+];
+
+const changeOptions: { label: string; value: ChangeFilter }[] = [
+  { label: 'Todos', value: 'ALL' },
+  { label: 'Alta', value: 'GAINERS' },
+  { label: 'Baixa', value: 'LOSERS' },
 ];
 
 export default function DashboardScreen() {
   const { user } = useAuth();
-  const [selected, setSelected] = useState(mockCryptos[0]);
-  const [pickerVisible, setPickerVisible] = useState(false);
+  const router = useRouter();
+  const [cryptos, setCryptos] = useState<Crypto[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [cryptos, setCryptos] = useState<Crypto[]>(mockCryptos);
+  const [loadingList, setLoadingList] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [quoteFilter, setQuoteFilter] = useState<QuoteFilter>('ALL');
+  const [changeFilter, setChangeFilter] = useState<ChangeFilter>('ALL');
 
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1500);
+  const fetchCryptos = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const response = await marketApi.getAllTickers();
+      const data = (response?.data ?? response ?? []) as any[];
+      const mapped = data
+        .map(item => {
+          const marketSymbol = (item.symbol || item.Symbol || '').toString().toUpperCase();
+          if (!marketSymbol) return null;
+          const { base, quote } = splitSymbol(marketSymbol);
+          const price = Number(item.lastPrice ?? item.LastPrice ?? item.price ?? 0);
+          const change = Number(item.priceChangePercent ?? item.PriceChangePercent ?? 0);
+          const volume = Number(item.volume ?? item.Volume ?? 0);
+          const quoteVolume = Number(item.quoteVolume ?? item.QuoteVolume ?? 0);
+          const meta = resolveTokenMeta(base);
+          return {
+            id: marketSymbol,
+            symbol: base,
+            pair: quote ? `${base}/${quote}` : marketSymbol,
+            quoteSymbol: quote,
+            name: meta.name,
+            price,
+            change24h: change,
+            marketCap: quoteVolume,
+            volume24h: volume,
+            image: meta.icon,
+          } as Crypto;
+        })
+        .filter(Boolean) as Crypto[];
+
+      const aggregated = mapped.reduce<Record<string, Crypto>>((acc, curr) => {
+        const existing = acc[curr.symbol];
+        const currIsStable = stableQuotes.includes(curr.quoteSymbol);
+        const existingIsStable = existing ? stableQuotes.includes(existing.quoteSymbol) : false;
+
+        if (!existing) {
+          acc[curr.symbol] = curr;
+          return acc;
+        }
+
+        if (currIsStable && !existingIsStable) {
+          acc[curr.symbol] = curr;
+          return acc;
+        }
+
+        if (currIsStable === existingIsStable) {
+          const currScore = curr.marketCap ?? 0;
+          const existingScore = existing.marketCap ?? 0;
+          if (currScore > existingScore) acc[curr.symbol] = curr;
+        }
+        return acc;
+      }, {});
+
+      const stableOnly = Object.values(aggregated).filter(c => usdPeghQuotes.includes(c.quoteSymbol));
+      stableOnly.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
+      const limited = stableOnly.slice(0, 20);
+      setCryptos(limited);
+      setError(limited.length ? null : 'Nenhuma cotação em dólar encontrada agora.');
+    } catch (err) {
+      console.warn('Failed to load cryptos', err);
+      setError('Não foi possível carregar as criptomoedas agora.');
+    } finally {
+      setLoadingList(false);
+    }
   }, []);
 
-  const totalValue = 125430.56;
-  const totalInvested = 100000;
-  const change24h = 3.2;
+  useEffect(() => {
+    void fetchCryptos();
+  }, [fetchCryptos]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchCryptos().finally(() => setRefreshing(false));
+  }, [fetchCryptos]);
+
+  const filteredCryptos = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    return cryptos.filter(c => {
+      if (
+        q &&
+        !(
+          c.symbol.toLowerCase().includes(q) ||
+          c.name.toLowerCase().includes(q) ||
+          c.pair.toLowerCase().includes(q)
+        )
+      ) {
+        return false;
+      }
+      if (quoteFilter === 'STABLE') {
+        if (!stableQuotes.includes(c.quoteSymbol)) return false;
+      } else if (quoteFilter !== 'ALL') {
+        if (c.quoteSymbol !== quoteFilter) return false;
+      }
+      if (changeFilter === 'GAINERS' && c.change24h <= 0) return false;
+      if (changeFilter === 'LOSERS' && c.change24h >= 0) return false;
+      return true;
+    });
+  }, [cryptos, searchText, quoteFilter, changeFilter]);
+
+  const showFilteredEmpty =
+    !loadingList && !error && cryptos.length > 0 && filteredCryptos.length === 0;
 
   return (
     <View style={styles.container}>
@@ -117,60 +248,107 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <PortfolioSummary
-            totalValue={totalValue}
-            change24h={change24h}
-            totalInvested={totalInvested}
-          />
+          <PortfolioSummary />
 
-          <View style={{ marginTop: 20, marginBottom: 12 }}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setPickerVisible(true)}
-              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View>
-                  <Text style={{ color: '#94a3b8', fontSize: 12 }}>Moeda selecionada</Text>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 18 }}>{selected?.symbol} — {selected?.name}</Text>
-                </View>
-                <Text style={{ color: '#eab308', fontWeight: '700' }}>Trocar</Text>
-              </View>
-            </TouchableOpacity>
+          <View style={styles.filtersCard}>
+            <Text style={styles.filterTitle}>Filtrar mercado</Text>
+            <View style={styles.searchBox}>
+              <TextInput
+                placeholder="Buscar por nome ou símbolo"
+                placeholderTextColor="#64748b"
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <Text style={styles.filterLabel}>Par</Text>
+            <View style={styles.filterRow}>
+              {quoteOptions.map(opt => {
+                const active = quoteFilter === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                    onPress={() => setQuoteFilter(opt.value)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.filterLabel}>Variação 24h</Text>
+            <View style={styles.filterRow}>
+              {changeOptions.map(opt => {
+                const active = changeFilter === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                    onPress={() => setChangeFilter(opt.value)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Principais Criptomoedas</Text>
-            {cryptos.map((crypto, index) => (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Principais Criptomoedas</Text>
+              <Text style={styles.sectionSubtitle}>{filteredCryptos.length} ativos</Text>
+            </View>
+            {loadingList && !cryptos.length && (
+              <View style={styles.listPlaceholder}>
+                <ActivityIndicator color="#eab308" />
+                <Text style={styles.placeholderText}>Carregando dados em tempo real...</Text>
+              </View>
+            )}
+            {!loadingList && error && !cryptos.length && (
+              <View style={styles.listPlaceholder}>
+                <Text style={styles.placeholderText}>{error}</Text>
+                <TouchableOpacity onPress={() => void fetchCryptos()} style={styles.retryButton}>
+                  <Text style={styles.retryText}>Tentar novamente</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {filteredCryptos.map((crypto, index) => (
               <CryptoCard
                 key={crypto.id}
                 crypto={crypto}
                 index={index}
                 onPress={() => {
-                  setSelected(crypto);
+                  try {
+                    const path = `/coin/${encodeURIComponent(crypto.symbol)}`;
+                    void router.push(path as any);
+                  } catch (e) {
+                    void router.push({ pathname: '/coin/[symbol]', params: { symbol: crypto.symbol } } as any);
+                  }
                 }}
               />
             ))}
+            {showFilteredEmpty && (
+              <View style={styles.listPlaceholder}>
+                <Text style={styles.placeholderText}>
+                  Nenhum ativo corresponde aos filtros escolhidos.
+                </Text>
+              </View>
+            )}
           </View>
-
-          <CoinPicker
-            visible={pickerVisible}
-            onClose={() => setPickerVisible(false)}
-            coins={cryptos}
-            onSelect={c =>
-              setSelected({
-                id: c.id,
-                name: c.name,
-                symbol: c.symbol,
-                price: c.price,
-                change24h: 0,
-                marketCap: 0,
-                volume24h: 0,
-                image: '',
-              })
-            }
-          />
-
           <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>
@@ -261,11 +439,92 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#ffffff',
-    marginBottom: 16,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  listPlaceholder: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  placeholderText: {
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 8, 0.4)',
+  },
+  retryText: {
+    color: '#eab308',
+    fontWeight: '600',
+  },
+  filtersCard: {
+    marginBottom: 24,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    gap: 12,
+  },
+  filterTitle: {
+    fontSize: 16,
+    color: '#f1f5f9',
+    fontWeight: '600',
+  },
+  searchBox: {
+    borderRadius: 12,
+    backgroundColor: 'rgba(15,23,42,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  searchInput: {
+    color: '#f8fafc',
+    fontSize: 14,
+  },
+  filterLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(234,179,8,0.15)',
+    borderColor: '#eab308',
+  },
+  filterChipText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#eab308',
   },
   floatingShape: {
     position: 'absolute',

@@ -4,7 +4,14 @@ const API_BASE = 'http://localhost:5102';
 
 async function getToken(): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync('token');
+    const t = await SecureStore.getItemAsync('token');
+    if (t) return t;
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        return window.sessionStorage.getItem('token');
+      }
+    } catch {}
+    return null;
   } catch {
     return null;
   }
@@ -44,18 +51,26 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
 
 export async function setToken(token: string) {
   try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem('token', token);
+    }
+  } catch (e) {}
+
+  try {
     await SecureStore.setItemAsync('token', token);
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
 }
 
 export async function removeToken() {
   try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem('token');
+    }
+  } catch (e) {}
+
+  try {
     await SecureStore.deleteItemAsync('token');
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
 }
 
 export async function getStoredToken() {

@@ -1,33 +1,31 @@
 import { Tabs } from 'expo-router';
 import { LayoutDashboard, User, TrendingUp } from 'lucide-react-native';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import { BlurView } from 'expo-blur';
 
 export default function TabLayout() {
+  const renderIcon = (Icon: any, label: string) => ({ focused }: { focused: boolean }) => (
+    <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+      <Icon size={24} color={focused ? '#071124' : '#cbd5e1'} />
+      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+    </View>
+  );
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          position: 'absolute',
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          height: 70,
-        },
+        tabBarShowLabel: false,
+        tabBarStyle: styles.tabBarStyle,
         tabBarBackground: () => (
-          <BlurView
-            intensity={80}
-            tint="dark"
-            style={StyleSheet.absoluteFill}
-          />
+          <View style={styles.tabBackgroundWrapper}>
+            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+          </View>
         ),
-        tabBarActiveTintColor: '#eab308',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-          marginBottom: 8,
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
         },
       }}
     >
@@ -35,27 +33,63 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ size, color }) => (
-            <LayoutDashboard size={size} color={color} />
-          ),
+          tabBarIcon: renderIcon(LayoutDashboard, 'Início'),
         }}
       />
       <Tabs.Screen
         name="market"
         options={{
           title: 'Mercado',
-          tabBarIcon: ({ size, color }) => (
-            <TrendingUp size={size} color={color} />
-          ),
+          tabBarIcon: renderIcon(TrendingUp, 'Mercado'),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ size, color }) => <User size={size} color={color} />,
+          tabBarIcon: renderIcon(User, 'Perfil'),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarStyle: {
+    position: 'absolute',
+    bottom: 18,
+    height: 64,
+    left: '4%',
+    right: '4%',
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    elevation: 0,
+  },
+  tabBackgroundWrapper: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(27, 27, 27, 0.6)',
+  },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    top: 8,
+  },
+  tabItemActive: {
+    backgroundColor: '#eab308',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+  },
+  tabLabel: {
+    color: '#cbd5e1',
+    fontSize: 10,
+    marginTop: 4,
+  },
+  tabLabelActive: {
+    color: '#071124',
+    fontWeight: '700',
+  },
+});

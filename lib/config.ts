@@ -33,17 +33,31 @@ export const api = axios.create({
 // Attach token from SecureStore on each request
 api.interceptors.request.use(async config => {
   try {
-    const token = await SecureStore.getItemAsync('token');
+    let token: string | null = null;
+    try {
+      token = await SecureStore.getItemAsync('token');
+    } catch {}
+
+    if (!token) {
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          token = window.sessionStorage.getItem('token');
+        }
+      } catch {}
+    }
+
     if (token && config.headers) {
       (config.headers as any).Authorization = `Bearer ${token}`;
+      try {
+        const short = token.length > 20 ? token.slice(0, 8) + '...' + token.slice(-8) : token;
+      } catch (e) {
+      }
     }
   } catch (e) {
-    // ignore
   }
   return config;
 });
 
-// Handle 401 globally: remove stored token
 api.interceptors.response.use(
   res => res,
   async err => {
@@ -52,7 +66,6 @@ api.interceptors.response.use(
         await SecureStore.deleteItemAsync('token');
         await SecureStore.deleteItemAsync('user');
       } catch (e) {
-        // ignore
       }
     }
     return Promise.reject(err);
