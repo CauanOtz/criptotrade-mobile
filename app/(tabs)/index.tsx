@@ -29,28 +29,27 @@ import Animated, {
 const { height } = Dimensions.get('window');
 
 const curatedTokenMeta: Record<string, { name: string; icon: string }> = {
-  BTC: { name: 'Bitcoin', icon: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=032' },
-  ETH: { name: 'Ethereum', icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032' },
-  BNB: { name: 'BNB', icon: 'https://cryptologos.cc/logos/binance-coin-bnb-logo.png?v=032' },
-  XRP: { name: 'XRP', icon: 'https://cryptologos.cc/logos/xrp-xrp-logo.png?v=032' },
-  ADA: { name: 'Cardano', icon: 'https://cryptologos.cc/logos/cardano-ada-logo.png?v=032' },
-  SOL: { name: 'Solana', icon: 'https://cryptologos.cc/logos/solana-sol-logo.png?v=032' },
-  DOGE: { name: 'Dogecoin', icon: 'https://cryptologos.cc/logos/dogecoin-doge-logo.png?v=032' },
-  MATIC: { name: 'Polygon', icon: 'https://cryptologos.cc/logos/polygon-matic-logo.png?v=032' },
-  DOT: { name: 'Polkadot', icon: 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png?v=032' },
-  LTC: { name: 'Litecoin', icon: 'https://cryptologos.cc/logos/litecoin-ltc-logo.png?v=032' },
-  AVAX: { name: 'Avalanche', icon: 'https://cryptologos.cc/logos/avalanche-avax-logo.png?v=032' },
-  SHIB: { name: 'Shiba Inu', icon: 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png?v=032' },
-  ATOM: { name: 'Cosmos', icon: 'https://cryptologos.cc/logos/cosmos-atom-logo.png?v=032' },
+  BTC: { name: 'Bitcoin', icon: marketApi.getCryptoIcon('BTC') },
+  ETH: { name: 'Ethereum', icon: marketApi.getCryptoIcon('ETH') },
+  BNB: { name: 'BNB', icon: marketApi.getCryptoIcon('BNB') },
+  XRP: { name: 'XRP', icon: marketApi.getCryptoIcon('XRP') },
+  ADA: { name: 'Cardano', icon: marketApi.getCryptoIcon('ADA') },
+  SOL: { name: 'Solana', icon: marketApi.getCryptoIcon('SOL') },
+  DOGE: { name: 'Dogecoin', icon: marketApi.getCryptoIcon('DOGE') },
+  MATIC: { name: 'Polygon', icon: marketApi.getCryptoIcon('MATIC') },
+  DOT: { name: 'Polkadot', icon: marketApi.getCryptoIcon('DOT') },
+  LTC: { name: 'Litecoin', icon: marketApi.getCryptoIcon('LTC') },
+  AVAX: { name: 'Avalanche', icon: marketApi.getCryptoIcon('AVAX') },
+  SHIB: { name: 'Shiba Inu', icon: marketApi.getCryptoIcon('SHIB') },
+  ATOM: { name: 'Cosmos', icon: marketApi.getCryptoIcon('ATOM') },
 };
 
 const resolveTokenMeta = (symbol: string) => {
   const upper = symbol.toUpperCase();
   if (curatedTokenMeta[upper]) return curatedTokenMeta[upper];
-  const cryptoIconsUrl = `https://cryptoicons.org/api/icon/${upper.toLowerCase()}/64`;
   return {
     name: upper,
-    icon: cryptoIconsUrl,
+    icon: marketApi.getCryptoIcon(upper),
   };
 };
 

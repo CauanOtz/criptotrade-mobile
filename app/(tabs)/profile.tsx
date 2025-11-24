@@ -20,6 +20,7 @@ import {
   Bell,
   Shield,
   ChevronRight,
+  Coins,
 } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
@@ -30,6 +31,10 @@ import Animated, {
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const isAdmin = Boolean(
+    (user?.role && typeof user.role === 'string' && user.role.toLowerCase() === 'admin') ||
+    user?.isAdmin === true
+  );
 
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
@@ -108,6 +113,31 @@ export default function ProfileScreen() {
               onPress={() => router.push('/security')}
             />
           </View>
+
+          {isAdmin && (
+            <View style={styles.adminSection}>
+              <Text style={styles.sectionTitle}>Área Administrativa</Text>
+              <GlassContainer style={styles.adminCard}>
+                <View style={styles.adminInfoRow}>
+                  <View style={styles.adminIconWrap}>
+                    <Coins size={24} color="#facc15" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.adminTitle}>Configurações (Admin)</Text>
+                    <Text style={styles.adminSubtitle}>
+                      Acesse o CRUD de moedas para criar, editar e remover ativos.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.adminButton}
+                  onPress={() => router.push('/admin/settings' as never)}
+                >
+                  <Text style={styles.adminButtonText}>Abrir painel</Text>
+                </TouchableOpacity>
+              </GlassContainer>
+            </View>
+          )}
 
           <TouchableOpacity
             style={styles.logoutButton}
@@ -288,5 +318,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ef4444',
+  },
+  adminSection: {
+    marginBottom: 24,
+  },
+  adminCard: {
+    padding: 20,
+    gap: 16,
+  },
+  adminInfoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  adminIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(250, 204, 21, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  adminTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#f8fafc',
+    marginBottom: 4,
+  },
+  adminSubtitle: {
+    color: '#94a3b8',
+    lineHeight: 20,
+  },
+  adminButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#facc15',
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  adminButtonText: {
+    color: '#071124',
+    fontWeight: '600',
   },
 });

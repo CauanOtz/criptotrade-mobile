@@ -10,6 +10,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Crypto } from '@/types/crypto';
+import FallbackImage from './FallbackImage';
+import { marketApi } from '@/lib/apiClient';
 import * as Haptics from 'expo-haptics';
 
 interface CryptoCardProps {
@@ -28,62 +30,62 @@ const tokenVisuals: Record<string, TokenVisual> = {
   BTC: {
     colors: ['rgba(247, 147, 26, 0.22)', 'rgba(247, 147, 26, 0.05)'],
     accent: '#f7931a',
-    icon: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('BTC'),
   },
   ETH: {
     colors: ['rgba(98, 126, 234, 0.22)', 'rgba(15, 23, 42, 0.6)'],
     accent: '#627eea',
-    icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('ETH'),
   },
   SOL: {
     colors: ['rgba(56, 25, 87, 0.35)', 'rgba(6, 182, 212, 0.08)'],
     accent: '#14f195',
-    icon: 'https://cryptologos.cc/logos/solana-sol-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('SOL'),
   },
   ADA: {
     colors: ['rgba(0, 103, 255, 0.25)', 'rgba(6, 182, 212, 0.05)'],
     accent: '#0067ff',
-    icon: 'https://cryptologos.cc/logos/cardano-ada-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('ADA'),
   },
   USDT: {
     colors: ['rgba(16, 185, 129, 0.24)', 'rgba(6, 78, 59, 0.05)'],
     accent: '#26a17b',
-    icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('USDT'),
   },
   BNB: {
     colors: ['rgba(251, 191, 36, 0.22)', 'rgba(15, 15, 15, 0.6)'],
     accent: '#f3ba2f',
-    icon: 'https://cryptologos.cc/logos/binance-coin-bnb-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('BNB'),
   },
   XRP: {
     colors: ['rgba(148, 163, 184, 0.25)', 'rgba(15, 23, 42, 0.5)'],
     accent: '#b1bccd',
-    icon: 'https://cryptologos.cc/logos/xrp-xrp-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('XRP'),
   },
   DOGE: {
     colors: ['rgba(245, 158, 11, 0.23)', 'rgba(15, 23, 42, 0.4)'],
     accent: '#c2a633',
-    icon: 'https://cryptologos.cc/logos/dogecoin-doge-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('DOGE'),
   },
   MATIC: {
     colors: ['rgba(168, 85, 247, 0.25)', 'rgba(15, 23, 42, 0.5)'],
     accent: '#8247e5',
-    icon: 'https://cryptologos.cc/logos/polygon-matic-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('MATIC'),
   },
   DOT: {
     colors: ['rgba(236, 72, 153, 0.25)', 'rgba(15, 23, 42, 0.5)'],
     accent: '#e6007a',
-    icon: 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('DOT'),
   },
   LTC: {
     colors: ['rgba(148, 163, 184, 0.25)', 'rgba(96, 165, 250, 0.06)'],
     accent: '#b8c4ce',
-    icon: 'https://cryptologos.cc/logos/litecoin-ltc-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('LTC'),
   },
   AVAX: {
     colors: ['rgba(248, 113, 113, 0.28)', 'rgba(15, 23, 42, 0.5)'],
     accent: '#e84142',
-    icon: 'https://cryptologos.cc/logos/avalanche-avax-logo.png?v=032',
+    icon: marketApi.getCryptoIcon('AVAX'),
   },
 };
 
@@ -148,7 +150,6 @@ export function CryptoCard({ crypto, index, onPress }: CryptoCardProps) {
   const accent = visual.accent;
   const changeBadgeBackground = isPositive ? `${accent}22` : '#ef444422';
   const changeBadgeColor = isPositive ? accent : '#ef4444';
-  const logoUri = crypto.image || visual.icon;
 
   return (
     <Animated.View style={animatedStyle}>
@@ -157,7 +158,7 @@ export function CryptoCard({ crypto, index, onPress }: CryptoCardProps) {
         onPress={handlePress}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <GlassContainer style={[styles.container, { overflow: 'hidden' }] }>
+        <GlassContainer style={StyleSheet.flatten([styles.container, { overflow: 'hidden' }])}>
           <LinearGradient
             colors={visual.colors}
             start={{ x: 0, y: 0 }}
@@ -177,7 +178,15 @@ export function CryptoCard({ crypto, index, onPress }: CryptoCardProps) {
                     },
                   ]}
                 >
-                  <Image source={{ uri: logoUri }} style={styles.logo} resizeMode="contain" />
+                  <FallbackImage
+                    symbol={symbol}
+                    pair={crypto.pair}
+                    name={crypto.name}
+                    image={crypto.image}
+                    curated={visual.icon}
+                    style={styles.logo}
+                    resizeMode="contain"
+                  />
                 </View>
                 <View>
                   <Text style={styles.symbol}>{symbol}</Text>
@@ -210,7 +219,7 @@ export function CryptoCard({ crypto, index, onPress }: CryptoCardProps) {
 
             <View style={styles.priceRow}>
               <Text style={[styles.price, { color: accent }]}>
-                ${crypto.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                ${crypto.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
               </Text>
               <Sparkline data={sparkData} width={160} height={52} stroke={accent} strokeWidth={2.5} />
             </View>

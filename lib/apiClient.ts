@@ -31,7 +31,7 @@ export const marketApi = {
   getRecentTrades: (symbol: string, limit = 500) => api.get(`/crypto/trades/${symbol}`, { params: { limit } }),
   getCoinData: (symbol: string) => api.get(`/market/coin/${symbol}`),
   getHistory: (symbol: string, timeframe: string) => api.get(`/market/history/${symbol}`, { params: { timeframe } }),
-  getAllCryptos: () => api.get('/Crypto'),
+  getAllCryptos: () => api.get('/crypto/tickers'),
   getCryptoIcon: (symbol: string) => `https://bin.bnbstatic.com/image/crypto/${symbol.toLowerCase()}.png`,
   getKlines: (symbol: string, interval = '15m', limit = 100) => api.get(`/crypto/klines/${symbol}`, { params: { interval, limit } }),
 };
@@ -71,9 +71,9 @@ export const settingsApi = {
 };
 
 export const currencyApi = {
-  getAllCurrencies: () => api.get('/Currency'),
-  getCurrencyById: (id: string) => api.get(`/Currency/${id}`),
-  createCurrency: (currencyData: any) => api.post('/Currency', currencyData),
-  updateCurrency: (id: string, currencyData: any) => api.put(`/Currency/${id}`, currencyData),
-  deleteCurrency: (id: string) => api.delete(`/Currency/${id}`),
+  getAllCurrencies: () => api.get('/currency'),
+  getCurrencyById: (id: string) => api.get(`/currency/${id}`),
+  createCurrency: (currencyData: any) => api.post('/currency', currencyData),
+  updateCurrency: (id: string, currencyData: any) => api.put(`/currency/${id}`, currencyData),
+  deleteCurrency: (id: string) => api.delete(`/currency/${id}`),
 };

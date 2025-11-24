@@ -14,7 +14,7 @@ function RootLayoutNav() {
 
     const inAuthGroup = Array.isArray(segments) && (segments as any).includes('(tabs)');
 
-    const allowedTopRoutes = ['settings', 'notifications', 'security', 'coin', 'wallet'];
+    const allowedTopRoutes = ['settings', 'notifications', 'security', 'coin', 'wallet', 'admin'];
     const firstSegment = Array.isArray(segments) && segments.length > 0 ? (segments as any)[0] : null;
 
     if (!user && inAuthGroup) {
