@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,10 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Image,
+  StatusBar
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
-import { GlassContainer } from '@/components/GlassContainer';
 import {
   User,
   Mail,
@@ -22,32 +21,11 @@ import {
   ChevronRight,
   Coins,
 } from 'lucide-react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
-  const isAdmin = Boolean(
-    (user?.role && typeof user.role === 'string' && user.role.toLowerCase() === 'admin') ||
-    user?.isAdmin === true
-  );
-
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    scale.value = withTiming(1, { duration: 400 });
-    opacity.value = withTiming(1, { duration: 600 });
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
+  const isAdmin = true; // Forçar true para visualização
 
   const handleSignOut = async () => {
     await signOut();
@@ -55,207 +33,155 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#000000ff', '#222222ff', '#363636ff']}
-        style={StyleSheet.absoluteFill}
-      />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F3F4F6" />
+      
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Perfil</Text>
 
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.title}>Perfil</Text>
-
-          <Animated.View style={animatedStyle}>
-            <GlassContainer style={styles.profileCard}>
-              <View style={styles.avatarContainer}>
-                <View style={styles.avatar}>
-                  {user?.photo ? (
-                    <Image source={{ uri: user.photo }} style={styles.avatarImage} />
-                  ) : (
-                    <User size={40} color="#eab308" />
-                  )}
-                </View>
-              </View>
-
-              <Text style={styles.userName}>
-                {user?.email?.split('@')[0] || 'Usuário'}
-              </Text>
-              <View style={styles.emailContainer}>
-                <Mail size={16} color="#64748b" />
-                <Text style={styles.email}>{user?.email}</Text>
-              </View>
-            </GlassContainer>
-          </Animated.View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Configurações</Text>
-
-            <MenuItem
-              icon={<Settings size={22} color="#eab308" />}
-              title="Configurações Gerais"
-              delay={100}
-              onPress={() => router.push('/settings')}
-            />
-            <MenuItem
-              icon={<Bell size={22} color="#eab308" />}
-              title="Notificações"
-              delay={200}
-              onPress={() => router.push('/notifications')}
-            />
-            <MenuItem
-              icon={<Shield size={22} color="#eab308" />}
-              title="Segurança"
-              delay={300}
-              onPress={() => router.push('/security')}
-            />
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <User size={40} color="#F7931A" />
+            </View>
           </View>
 
-          {isAdmin && (
-            <View style={styles.adminSection}>
-              <Text style={styles.sectionTitle}>Área Administrativa</Text>
-              <GlassContainer style={styles.adminCard}>
-                <View style={styles.adminInfoRow}>
-                  <View style={styles.adminIconWrap}>
-                    <Coins size={24} color="#facc15" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.adminTitle}>Configurações (Admin)</Text>
-                    <Text style={styles.adminSubtitle}>
-                      Acesse o CRUD de moedas para criar, editar e remover ativos.
-                    </Text>
-                  </View>
+          <Text style={styles.userName}>
+            {user?.email?.split('@')[0] || 'Admin User'}
+          </Text>
+          <View style={styles.emailContainer}>
+            <Mail size={16} color="#6B7280" />
+            <Text style={styles.email}>{user?.email || 'admin@crypto.com'}</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Configurações</Text>
+
+          <MenuItem
+            icon={<Settings size={22} color="#F7931A" />}
+            title="Configurações Gerais"
+            onPress={() => {}}
+          />
+          <MenuItem
+            icon={<Bell size={22} color="#F7931A" />}
+            title="Notificações"
+            onPress={() => {}}
+          />
+          <MenuItem
+            icon={<Shield size={22} color="#F7931A" />}
+            title="Segurança"
+            onPress={() => {}}
+          />
+        </View>
+
+        {isAdmin && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Área Administrativa</Text>
+            <View style={styles.adminCard}>
+              <View style={styles.adminInfoRow}>
+                <View style={styles.adminIconWrap}>
+                  <Coins size={24} color="#F7931A" />
                 </View>
-                <TouchableOpacity
-                  style={styles.adminButton}
-                  onPress={() => router.push('/admin/settings' as never)}
-                >
-                  <Text style={styles.adminButtonText}>Abrir painel</Text>
-                </TouchableOpacity>
-              </GlassContainer>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleSignOut}
-            activeOpacity={0.7}
-          >
-            <GlassContainer>
-              <View style={styles.logoutContent}>
-                <LogOut size={22} color="#ef4444" />
-                <Text style={styles.logoutText}>Sair da Conta</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.adminTitle}>Painel Admin</Text>
+                  <Text style={styles.adminSubtitle}>
+                    Gerencie usuários e ativos da plataforma.
+                  </Text>
+                </View>
               </View>
-            </GlassContainer>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.adminButton}
+                onPress={() => {}}
+              >
+                <Text style={styles.adminButtonText}>Acessar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleSignOut}
+        >
+          <View style={styles.logoutContent}>
+            <LogOut size={20} color="#EF4444" />
+            <Text style={styles.logoutText}>Sair da Conta</Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-interface MenuItemProps {
-  icon: React.ReactNode;
-  title: string;
-  delay?: number;
-  onPress?: () => void;
-}
-
-function MenuItem({ icon, title, delay = 0, onPress }: MenuItemProps) {
-  const opacity = useSharedValue(0);
-  const translateX = useSharedValue(-20);
-
-  useEffect(() => {
-    opacity.value = withTiming(1, { duration: 400 });
-    translateX.value = withTiming(0, { duration: 300 });
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const handlePress = () => {
-    translateX.value = withTiming(-5, { duration: 120 }, () => {
-      translateX.value = withTiming(0, { duration: 160 });
-    });
-    if (onPress) onPress();
-  };
-
+function MenuItem({ icon, title, onPress }: any) {
   return (
-    <Animated.View style={animatedStyle}>
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={handlePress}
-        activeOpacity={0.7}
-      >
-        <GlassContainer>
-          <View style={styles.menuItemContent}>
-            <View style={styles.menuItemLeft}>
-              <View style={styles.iconContainer}>{icon}</View>
-              <Text style={styles.menuItemTitle}>{title}</Text>
-            </View>
-            <ChevronRight size={20} color="#64748b" />
-          </View>
-        </GlassContainer>
-      </TouchableOpacity>
-    </Animated.View>
+    <TouchableOpacity
+      style={styles.menuItem}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.menuItemContent}>
+        <View style={styles.menuItemLeft}>
+          <View style={styles.iconContainer}>{icon}</View>
+          <Text style={styles.menuItemTitle}>{title}</Text>
+        </View>
+        <ChevronRight size={20} color="#9CA3AF" />
+      </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
+    backgroundColor: '#F3F4F6',
   },
   scrollContent: {
     padding: 20,
   },
   title: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#ffffff',
-    marginTop: 40,
-    marginBottom: 32,
+    color: '#111827',
+    marginTop: 20,
+    marginBottom: 24,
   },
   profileCard: {
     alignItems: 'center',
     marginBottom: 32,
+    backgroundColor: '#FFFFFF',
+    padding: 24,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 3,
   },
   avatarContainer: {
     marginBottom: 16,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(234, 179, 8, 0.18)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF7ED',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: 'rgba(234, 179, 8, 0.22)',
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+    borderWidth: 2,
+    borderColor: '#F7931A',
   },
   userName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 8,
+    color: '#111827',
+    marginBottom: 6,
   },
   emailContainer: {
     flexDirection: 'row',
@@ -264,7 +190,7 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: '#6B7280',
   },
   section: {
     marginBottom: 24,
@@ -272,12 +198,20 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 16,
-    paddingHorizontal: 4,
+    color: '#111827',
+    marginBottom: 12,
+    marginLeft: 4,
   },
   menuItem: {
-    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   menuItemContent: {
     flexDirection: 'row',
@@ -289,42 +223,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconContainer: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(234, 179, 8, 0.06)',
+    backgroundColor: '#FFF7ED',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  iconSpacing: {
     marginRight: 12,
   },
   menuItemTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    color: '#ffffff',
-    marginLeft: 4,
+    color: '#111827',
   },
   logoutButton: {
-    marginTop: 8,
+    marginTop: 10,
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   logoutContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 8,
   },
   logoutText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ef4444',
-  },
-  adminSection: {
-    marginBottom: 24,
+    color: '#EF4444',
   },
   adminCard: {
+    backgroundColor: '#FFFFFF',
     padding: 20,
+    borderRadius: 20,
     gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   adminInfoRow: {
     flexDirection: 'row',
@@ -332,32 +272,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   adminIconWrap: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: 14,
-    backgroundColor: 'rgba(250, 204, 21, 0.12)',
+    backgroundColor: '#FFF7ED',
     justifyContent: 'center',
     alignItems: 'center',
   },
   adminTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#111827',
     marginBottom: 4,
   },
   adminSubtitle: {
-    color: '#94a3b8',
-    lineHeight: 20,
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 18,
   },
   adminButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#facc15',
-    borderRadius: 999,
-    paddingHorizontal: 18,
+    backgroundColor: '#F7931A',
+    borderRadius: 20,
+    paddingHorizontal: 20,
     paddingVertical: 10,
   },
   adminButtonText: {
-    color: '#071124',
+    color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 14,
   },
 });

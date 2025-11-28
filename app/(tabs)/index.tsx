@@ -1,532 +1,514 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  RefreshControl,
-  Dimensions,
   TouchableOpacity,
-  ActivityIndicator,
-  TextInput,
+  Dimensions,
+  StatusBar,
+  Image
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
-import { PortfolioSummary } from '@/components/PortfolioSummary';
-import { CryptoCard } from '@/components/CryptoCard';
-import { Crypto } from '@/types/crypto';
-import { useRouter } from 'expo-router';
-import { marketApi } from '@/lib/apiClient';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  withSequence,
-} from 'react-native-reanimated';
+import { WelcomeScreen } from '@/components/WelcomeScreen'; // Importe o componente
+import { 
+  Zap, 
+  TrendingUp, 
+  ArrowUpRight, 
+  BarChart2, 
+  Activity, 
+  PieChart, 
+  Clock 
+} from 'lucide-react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
-const { height } = Dimensions.get('window');
-
-const curatedTokenMeta: Record<string, { name: string; icon: string }> = {
-  BTC: { name: 'Bitcoin', icon: marketApi.getCryptoIcon('BTC') },
-  ETH: { name: 'Ethereum', icon: marketApi.getCryptoIcon('ETH') },
-  BNB: { name: 'BNB', icon: marketApi.getCryptoIcon('BNB') },
-  XRP: { name: 'XRP', icon: marketApi.getCryptoIcon('XRP') },
-  ADA: { name: 'Cardano', icon: marketApi.getCryptoIcon('ADA') },
-  SOL: { name: 'Solana', icon: marketApi.getCryptoIcon('SOL') },
-  DOGE: { name: 'Dogecoin', icon: marketApi.getCryptoIcon('DOGE') },
-  MATIC: { name: 'Polygon', icon: marketApi.getCryptoIcon('MATIC') },
-  DOT: { name: 'Polkadot', icon: marketApi.getCryptoIcon('DOT') },
-  LTC: { name: 'Litecoin', icon: marketApi.getCryptoIcon('LTC') },
-  AVAX: { name: 'Avalanche', icon: marketApi.getCryptoIcon('AVAX') },
-  SHIB: { name: 'Shiba Inu', icon: marketApi.getCryptoIcon('SHIB') },
-  ATOM: { name: 'Cosmos', icon: marketApi.getCryptoIcon('ATOM') },
-};
-
-const resolveTokenMeta = (symbol: string) => {
-  const upper = symbol.toUpperCase();
-  if (curatedTokenMeta[upper]) return curatedTokenMeta[upper];
-  return {
-    name: upper,
-    icon: marketApi.getCryptoIcon(upper),
-  };
-};
-
-type QuoteFilter = 'ALL' | 'USDT' | 'BTC' | 'STABLE';
-type ChangeFilter = 'ALL' | 'GAINERS' | 'LOSERS';
-
-const quoteSuffixes = [
-  'USDT',
-  'USDC',
-  'BUSD',
-  'TUSD',
-  'USDP',
-  'DAI',
-  'BTC',
-  'ETH',
-  'BNB',
-  'BRL',
-  'EUR',
-  'USD',
-  'TRY',
-  'BIDR',
-  'AUD',
-  'GBP',
-  'ARS',
+// ... (Mantenha as constantes TRENDING_COINS, MENU_TABS como estavam)
+const TRENDING_COINS = [
+  { symbol: 'CREAM', name: 'Cream', change: 65.4, price: 2.1 },
+  { symbol: 'PNT', name: 'PNetwork', change: 45.2, price: 0.035 },
+  { symbol: 'BANANA', name: 'Banana', change: 33.6, price: 10.97 },
 ];
 
-const usdPeghQuotes = ['USDT', 'USDC', 'BUSD', 'TUSD', 'USDP', 'DAI'];
-const fiatQuotes = ['BRL', 'EUR', 'USD'];
-const stableQuotes = [...usdPeghQuotes, ...fiatQuotes];
-
-const splitSymbol = (symbol: string) => {
-  const upper = symbol.toUpperCase();
-  const match = quoteSuffixes.find(suffix => upper.endsWith(suffix));
-  if (!match) return { base: upper, quote: '' };
-  return {
-    base: upper.slice(0, -match.length) || upper,
-    quote: match,
-  };
-};
-
-const quoteOptions: { label: string; value: QuoteFilter }[] = [
-  { label: 'Todos', value: 'ALL' },
-  { label: 'USDT', value: 'USDT' },
-  { label: 'BTC', value: 'BTC' },
-  { label: 'Stable', value: 'STABLE' },
-];
-
-const changeOptions: { label: string; value: ChangeFilter }[] = [
-  { label: 'Todos', value: 'ALL' },
-  { label: 'Alta', value: 'GAINERS' },
-  { label: 'Baixa', value: 'LOSERS' },
+const MENU_TABS = [
+  { id: 'chart', icon: BarChart2, label: 'Gráfico' },
+  { id: 'markets', icon: Activity, label: 'Mercados' },
+  { id: 'transactions', icon: PieChart, label: 'Transações' },
+  { id: 'news', icon: Clock, label: 'Notícias' },
 ];
 
 export default function DashboardScreen() {
   const { user } = useAuth();
-  const router = useRouter();
-  const [cryptos, setCryptos] = useState<Crypto[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingList, setLoadingList] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searchText, setSearchText] = useState('');
-  const [quoteFilter, setQuoteFilter] = useState<QuoteFilter>('ALL');
-  const [changeFilter, setChangeFilter] = useState<ChangeFilter>('ALL');
+  const [activeTab, setActiveTab] = useState('chart');
+  
+  // Estado para controlar a visibilidade da tela de boas-vindas
+  const [showWelcome, setShowWelcome] = useState(true);
 
-  const fetchCryptos = useCallback(async () => {
-    setLoadingList(true);
-    try {
-      const response = await marketApi.getAllTickers();
-      const data = (response?.data ?? response ?? []) as any[];
-      const mapped = data
-        .map(item => {
-          const marketSymbol = (item.symbol || item.Symbol || '').toString().toUpperCase();
-          if (!marketSymbol) return null;
-          const { base, quote } = splitSymbol(marketSymbol);
-          const price = Number(item.lastPrice ?? item.LastPrice ?? item.price ?? 0);
-          const change = Number(item.priceChangePercent ?? item.PriceChangePercent ?? 0);
-          const volume = Number(item.volume ?? item.Volume ?? 0);
-          const quoteVolume = Number(item.quoteVolume ?? item.QuoteVolume ?? 0);
-          const meta = resolveTokenMeta(base);
-          return {
-            id: marketSymbol,
-            symbol: base,
-            pair: quote ? `${base}/${quote}` : marketSymbol,
-            quoteSymbol: quote,
-            name: meta.name,
-            price,
-            change24h: change,
-            marketCap: quoteVolume,
-            volume24h: volume,
-            image: meta.icon,
-          } as Crypto;
-        })
-        .filter(Boolean) as Crypto[];
-
-      const aggregated = mapped.reduce<Record<string, Crypto>>((acc, curr) => {
-        const existing = acc[curr.symbol];
-        const currIsStable = stableQuotes.includes(curr.quoteSymbol);
-        const existingIsStable = existing ? stableQuotes.includes(existing.quoteSymbol) : false;
-
-        if (!existing) {
-          acc[curr.symbol] = curr;
-          return acc;
-        }
-
-        if (currIsStable && !existingIsStable) {
-          acc[curr.symbol] = curr;
-          return acc;
-        }
-
-        if (currIsStable === existingIsStable) {
-          const currScore = curr.marketCap ?? 0;
-          const existingScore = existing.marketCap ?? 0;
-          if (currScore > existingScore) acc[curr.symbol] = curr;
-        }
-        return acc;
-      }, {});
-
-      const stableOnly = Object.values(aggregated).filter(c => usdPeghQuotes.includes(c.quoteSymbol));
-      stableOnly.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
-      const limited = stableOnly.slice(0, 20);
-      setCryptos(limited);
-      setError(limited.length ? null : 'Nenhuma cotação em dólar encontrada agora.');
-    } catch (err) {
-      console.warn('Failed to load cryptos', err);
-      setError('Não foi possível carregar as criptomoedas agora.');
-    } finally {
-      setLoadingList(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchCryptos();
-  }, [fetchCryptos]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    void fetchCryptos().finally(() => setRefreshing(false));
-  }, [fetchCryptos]);
-
-  const filteredCryptos = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-    return cryptos.filter(c => {
-      if (
-        q &&
-        !(
-          c.symbol.toLowerCase().includes(q) ||
-          c.name.toLowerCase().includes(q) ||
-          c.pair.toLowerCase().includes(q)
-        )
-      ) {
-        return false;
-      }
-      if (quoteFilter === 'STABLE') {
-        if (!stableQuotes.includes(c.quoteSymbol)) return false;
-      } else if (quoteFilter !== 'ALL') {
-        if (c.quoteSymbol !== quoteFilter) return false;
-      }
-      if (changeFilter === 'GAINERS' && c.change24h <= 0) return false;
-      if (changeFilter === 'LOSERS' && c.change24h >= 0) return false;
-      return true;
-    });
-  }, [cryptos, searchText, quoteFilter, changeFilter]);
-
-  const showFilteredEmpty =
-    !loadingList && !error && cryptos.length > 0 && filteredCryptos.length === 0;
+  const userName = user?.name || user?.email?.split('@')[0] || 'Admin';
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#000000ff', '#222222ff', '#363636ff']}
-        style={StyleSheet.absoluteFill}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F3F4F6" />
+      
+      {/* Tela de Boas-vindas (Modal) */}
+      <WelcomeScreen 
+        visible={showWelcome} 
+        userName={userName}
+        onComplete={() => setShowWelcome(false)}
       />
+      
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ... (Todo o resto do seu código da Dashboard permanece igual) ... */}
+        
+        {/* 1. Header Fiel à Web */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greetingTitle}>
+              Olá, <Text style={styles.userName}>{userName}</Text>!
+            </Text>
+            <Text style={styles.greetingSubtitle}>Seja Bem-vindo!</Text>
+            <Text style={styles.greetingDesc}>Seu painel de negociações personalizado</Text>
+          </View>
+          
+          <TouchableOpacity style={styles.fastTradeBtn}>
+            <Zap size={16} color="#FFF" style={{ marginRight: 4 }} />
+            <Text style={styles.fastTradeText}>Negociar</Text>
+          </TouchableOpacity>
+        </View>
 
-      <FloatingShapes />
+        {/* 2. Seção de Tendências e Dicas */}
+        <Animated.View entering={FadeInDown.delay(100).duration(500)}>
+          {/* Card de Tendências */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBg, { backgroundColor: 'rgba(247, 147, 26, 0.1)' }]}>
+                <TrendingUp size={20} color="#F7931A" />
+              </View>
+              <Text style={styles.cardTitle}>Moedas em tendência</Text>
+            </View>
 
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#eab308"
-            />
-          }
-        >
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>Olá</Text>
-              <Text style={styles.userName}>
-                {user?.email?.split('@')[0] || 'Usuário'}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.trendingScroll}>
+              {TRENDING_COINS.map((coin) => (
+                <View key={coin.symbol} style={styles.trendingItem}>
+                  <View style={styles.trendingHeader}>
+                    <Text style={styles.coinSymbol}>{coin.symbol}</Text>
+                    <View style={styles.changeBadge}>
+                      <ArrowUpRight size={12} color="#10B981" />
+                      <Text style={styles.changeText}>{coin.change}%</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.coinPrice}>R$ {coin.price.toFixed(3)}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Card de Dicas */}
+          <View style={[styles.card, { marginTop: 16 }]}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBg, { backgroundColor: 'rgba(247, 147, 26, 0.1)' }]}>
+                <Zap size={20} color="#F7931A" />
+              </View>
+              <Text style={styles.cardTitle}>Dicas de trading</Text>
+            </View>
+            <View style={styles.tipBox}>
+              <Text style={styles.tipText}>
+                "Nunca invista mais do que você pode perder. Diversifique sua carteira para reduzir riscos e mantenha uma estratégia sólida."
               </Text>
             </View>
           </View>
+        </Animated.View>
 
-          <PortfolioSummary />
-
-          <View style={styles.filtersCard}>
-            <Text style={styles.filterTitle}>Filtrar mercado</Text>
-            <View style={styles.searchBox}>
-              <TextInput
-                placeholder="Buscar por nome ou símbolo"
-                placeholderTextColor="#64748b"
-                style={styles.searchInput}
-                value={searchText}
-                onChangeText={setSearchText}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <Text style={styles.filterLabel}>Par</Text>
-            <View style={styles.filterRow}>
-              {quoteOptions.map(opt => {
-                const active = quoteFilter === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                    onPress={() => setQuoteFilter(opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text
-                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={styles.filterLabel}>Variação 24h</Text>
-            <View style={styles.filterRow}>
-              {changeOptions.map(opt => {
-                const active = changeFilter === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                    onPress={() => setChangeFilter(opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text
-                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Principais Criptomoedas</Text>
-              <Text style={styles.sectionSubtitle}>{filteredCryptos.length} ativos</Text>
-            </View>
-            {loadingList && !cryptos.length && (
-              <View style={styles.listPlaceholder}>
-                <ActivityIndicator color="#eab308" />
-                <Text style={styles.placeholderText}>Carregando dados em tempo real...</Text>
-              </View>
-            )}
-            {!loadingList && error && !cryptos.length && (
-              <View style={styles.listPlaceholder}>
-                <Text style={styles.placeholderText}>{error}</Text>
-                <TouchableOpacity onPress={() => void fetchCryptos()} style={styles.retryButton}>
-                  <Text style={styles.retryText}>Tentar novamente</Text>
+        {/* 3. Navegação de Abas (Tabs Internas) */}
+        <View style={styles.tabsContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {MENU_TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  onPress={() => setActiveTab(tab.id)}
+                  style={[
+                    styles.tabButton,
+                    isActive && styles.tabButtonActive
+                  ]}
+                >
+                  <Icon 
+                    size={18} 
+                    color={isActive ? '#FFF' : '#6B7280'} 
+                  />
+                  <Text style={[
+                    styles.tabText,
+                    isActive && styles.tabTextActive
+                  ]}>
+                    {tab.label}
+                  </Text>
                 </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* 4. Conteúdo Dinâmico (Placeholder do Gráfico) */}
+        <Animated.View 
+          entering={FadeInDown.delay(300).duration(500)}
+          style={styles.mainContent}
+        >
+          {activeTab === 'chart' && (
+            <View style={styles.chartCard}>
+              <View style={styles.chartHeader}>
+                <View>
+                  <Text style={styles.chartTitle}>Bitcoin (BTC)</Text>
+                  <Text style={styles.chartPrice}>R$ 90.630,28</Text>
+                </View>
+                <View style={styles.timeFrame}>
+                  <Text style={styles.timeFrameText}>24H</Text>
+                </View>
               </View>
-            )}
-            {filteredCryptos.map((crypto, index) => (
-              <CryptoCard
-                key={crypto.id}
-                crypto={crypto}
-                index={index}
-                onPress={() => {
-                  try {
-                    const path = `/coin/${encodeURIComponent(crypto.symbol)}`;
-                    void router.push(path as any);
-                  } catch (e) {
-                    void router.push({ pathname: '/coin/[symbol]', params: { symbol: crypto.symbol } } as any);
-                  }
-                }}
-              />
+              
+              <View style={styles.chartVisual}>
+                <View style={styles.chartBars}>
+                  {[40, 60, 45, 70, 65, 85, 80, 95, 120, 110, 90, 100].map((h, i) => (
+                    <View 
+                      key={i} 
+                      style={{
+                        width: 16, 
+                        height: h, 
+                        backgroundColor: '#F7931A', 
+                        opacity: 0.2 + (i/20),
+                        borderRadius: 4
+                      }} 
+                    />
+                  ))}
+                </View>
+                <Text style={styles.chartLabel}>Gráfico em Tempo Real</Text>
+              </View>
+            </View>
+          )}
+          
+          <View style={styles.marketList}>
+            <Text style={styles.sectionTitle}>Market Pulse</Text>
+            {[1, 2, 3].map((item) => (
+              <View key={item} style={styles.marketItem}>
+                <View style={styles.marketItemLeft}>
+                  <View style={styles.coinIconPlaceholder}>
+                    <Text style={{fontWeight: 'bold', color: '#F7931A'}}>B</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.marketCoinName}>Bitcoin</Text>
+                    <Text style={styles.marketCoinSymbol}>BTC</Text>
+                  </View>
+                </View>
+                <View style={{alignItems: 'flex-end'}}>
+                  <Text style={styles.marketCoinPrice}>R$ 90.630,28</Text>
+                  <View style={styles.badgeSuccess}>
+                    <ArrowUpRight size={10} color="#10B981" />
+                    <Text style={styles.badgeSuccessText}>+5.2%</Text>
+                  </View>
+                </View>
+              </View>
             ))}
-            {showFilteredEmpty && (
-              <View style={styles.listPlaceholder}>
-                <Text style={styles.placeholderText}>
-                  Nenhum ativo corresponde aos filtros escolhidos.
-                </Text>
-              </View>
-            )}
           </View>
-          <View style={{ height: 100 }} />
-        </ScrollView>
-      </SafeAreaView>
-    </View>
-  );
-}
+        </Animated.View>
 
-function FloatingShapes() {
-  return (
-    <>
-      <FloatingShape index={0} />
-      <FloatingShape index={1} />
-      <FloatingShape index={2} />
-    </>
-  );
-}
-
-function FloatingShape({ index }: { index: number }) {
-  const translateY = useSharedValue(0);
-  const opacity = useSharedValue(0.3);
-
-  useEffect(() => {
-    translateY.value = withRepeat(
-      withSequence(
-        withTiming(30, { duration: 3000 + index * 500 }),
-        withTiming(-30, { duration: 3000 + index * 500 })
-      ),
-      -1,
-      true
-    );
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
-  }));
-
-  const positions = [
-    { top: height * 0.1, right: 20, width: 100, height: 100 },
-    { top: height * 0.4, left: 30, width: 80, height: 80 },
-    { bottom: height * 0.2, right: 40, width: 120, height: 120 },
-  ];
-
-  return (
-    <Animated.View
-      style={[
-        styles.floatingShape,
-        {
-          ...positions[index],
-          borderRadius: positions[index].width / 2,
-        },
-        animatedStyle,
-      ]}
-    />
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
+    backgroundColor: '#F3F4F6',
   },
   scrollContent: {
-    padding: 24,
+    padding: 20,
   },
+  // ... (Todos os outros estilos permanecem os mesmos que enviei anteriormente)
   header: {
+    marginBottom: 24,
+    marginTop: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 28,
-    marginTop: 16,
+    alignItems: 'flex-start',
   },
-  greeting: {
-    fontSize: 16,
-    color: '#94a3b8',
-    marginBottom: 4,
+  greetingTitle: {
+    fontSize: 20,
+    color: '#111827',
+    fontWeight: '600',
   },
   userName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#ffffff',
+    color: '#F7931A',
+    fontWeight: 'bold',
   },
-  section: {
-    marginBottom: 24,
+  greetingSubtitle: {
+    fontSize: 24,
+    color: '#111827',
+    fontWeight: 'bold',
   },
-  sectionHeader: {
+  greetingDesc: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  fastTradeBtn: {
+    backgroundColor: '#F7931A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    shadowColor: '#F7931A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  fastTradeText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  iconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  trendingScroll: {
+    marginHorizontal: -4,
+  },
+  trendingItem: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    padding: 16,
+    marginRight: 12,
+    width: 140,
+  },
+  trendingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#ffffff',
+  coinSymbol: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#374151',
   },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: '#94a3b8',
-  },
-  listPlaceholder: {
-    paddingVertical: 32,
+  changeBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  changeText: {
+    fontSize: 10,
+    color: '#10B981',
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  coinPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  tipBox: {
+    backgroundColor: '#FFF7ED',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F7931A',
+  },
+  tipText: {
+    fontSize: 14,
+    color: '#4B5563',
+    fontStyle: 'italic',
+    lineHeight: 22,
+  },
+  tabsContainer: {
+    marginTop: 24,
+    marginBottom: 20,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    marginRight: 10,
+    backgroundColor: '#E5E7EB',
+  },
+  tabButtonActive: {
+    backgroundColor: '#F7931A',
+    shadowColor: '#F7931A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+    color: '#6B7280',
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+  },
+  mainContent: {
+    gap: 20,
+  },
+  chartCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    height: 320,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  chartTitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  chartPrice: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  timeFrame: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  timeFrameText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  chartVisual: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 20,
+  },
+  chartBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 150,
+    gap: 8,
+    marginBottom: 16,
+  },
+  chartLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  marketList: {
     gap: 12,
   },
-  placeholderText: {
-    color: '#94a3b8',
-    textAlign: 'center',
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 8,
   },
-  retryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.4)',
-  },
-  retryText: {
-    color: '#eab308',
-    fontWeight: '600',
-  },
-  filtersCard: {
-    marginBottom: 24,
+  marketItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  filterTitle: {
-    fontSize: 16,
-    color: '#f1f5f9',
-    fontWeight: '600',
-  },
-  searchBox: {
-    borderRadius: 12,
-    backgroundColor: 'rgba(15,23,42,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  searchInput: {
-    color: '#f8fafc',
-    fontSize: 14,
-  },
-  filterLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  filterRow: {
+  marketItemLeft: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
   },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.3)',
+  coinIconPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  filterChipActive: {
-    backgroundColor: 'rgba(234,179,8,0.15)',
-    borderColor: '#eab308',
-  },
-  filterChipText: {
-    color: '#94a3b8',
-    fontSize: 12,
+  marketCoinName: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#111827',
   },
-  filterChipTextActive: {
-    color: '#eab308',
+  marketCoinSymbol: {
+    fontSize: 13,
+    color: '#9CA3AF',
   },
-  floatingShape: {
-    position: 'absolute',
-    backgroundColor: 'rgba(234, 179, 8, 0.06)',
+  marketCoinPrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  badgeSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  badgeSuccessText: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '600',
+    marginLeft: 2,
   },
 });

@@ -1,13 +1,13 @@
 import { Tabs } from 'expo-router';
 import { LayoutDashboard, User, TrendingUp } from 'lucide-react-native';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 
 export default function TabLayout() {
   const renderIcon = (Icon: any, label: string) => ({ focused }: { focused: boolean }) => (
     <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-      <Icon size={24} color={focused ? '#071124' : '#cbd5e1'} />
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+      <Icon size={24} color={focused ? '#FFF' : '#9CA3AF'} />
+      {focused && <Text style={styles.tabLabel}>{label}</Text>}
     </View>
   );
 
@@ -18,9 +18,11 @@ export default function TabLayout() {
         tabBarShowLabel: false,
         tabBarStyle: styles.tabBarStyle,
         tabBarBackground: () => (
-          <View style={styles.tabBackgroundWrapper}>
-            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-          </View>
+          Platform.OS === 'ios' ? (
+            <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }]} />
+          )
         ),
         tabBarItemStyle: {
           justifyContent: 'center',
@@ -57,39 +59,34 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarStyle: {
     position: 'absolute',
-    bottom: 18,
+    bottom: 20,
     height: 64,
-    left: '4%',
-    right: '4%',
-    backgroundColor: 'transparent',
+    left: 20,
+    right: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     borderTopWidth: 0,
-    elevation: 0,
-  },
-  tabBackgroundWrapper: {
-    flex: 1,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(27, 27, 27, 0.6)',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
   },
   tabItem: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    top: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 30,
   },
   tabItemActive: {
-    backgroundColor: '#eab308',
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    backgroundColor: '#F7931A',
   },
   tabLabel: {
-    color: '#cbd5e1',
-    fontSize: 10,
-    marginTop: 4,
-  },
-  tabLabelActive: {
-    color: '#071124',
-    fontWeight: '700',
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
