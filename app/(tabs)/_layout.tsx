@@ -1,7 +1,6 @@
 import { Tabs } from 'expo-router';
-import { LayoutDashboard, User, TrendingUp } from 'lucide-react-native';
+import { LayoutDashboard, Wallet, TrendingUp, Grid } from 'lucide-react-native';
 import { StyleSheet, View, Text, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
 
 export default function TabLayout() {
   const renderIcon = (Icon: any, label: string) => ({ focused }: { focused: boolean }) => (
@@ -17,20 +16,10 @@ export default function TabLayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: styles.tabBarStyle,
-        tabBarBackground: () => (
-          Platform.OS === 'ios' ? (
-            <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }]} />
-          )
-        ),
-        tabBarItemStyle: {
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100%',
-        },
+        // Removido background complexo para evitar bugs de transparência
       }}
     >
+      {/* 1. Início */}
       <Tabs.Screen
         name="index"
         options={{
@@ -38,6 +27,8 @@ export default function TabLayout() {
           tabBarIcon: renderIcon(LayoutDashboard, 'Início'),
         }}
       />
+      
+      {/* 2. Mercados */}
       <Tabs.Screen
         name="market"
         options={{
@@ -45,11 +36,30 @@ export default function TabLayout() {
           tabBarIcon: renderIcon(TrendingUp, 'Mercado'),
         }}
       />
+
+      {/* 3. Carteira (Novo) */}
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: 'Carteira',
+          tabBarIcon: renderIcon(Wallet, 'Carteira'),
+        }}
+      />
+
+      {/* 4. Menu / Todos (Substitui o Profile direto na barra) */}
+      <Tabs.Screen
+        name="menu"
+        options={{
+          title: 'Todos',
+          tabBarIcon: renderIcon(Grid, 'Todos'),
+        }}
+      />
+
+      {/* Ocultar a rota antiga de profile da barra, mas manter acessível se necessário */}
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Perfil',
-          tabBarIcon: renderIcon(User, 'Perfil'),
+          href: null, // Isso esconde o botão da barra
         }}
       />
     </Tabs>
@@ -77,7 +87,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     borderRadius: 30,
   },
   tabItemActive: {
@@ -85,8 +95,8 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: 6,
   },
 });
