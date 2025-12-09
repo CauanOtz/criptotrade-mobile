@@ -2,14 +2,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Activity,
+  ArrowUpRight,
   BarChart2,
+  ChevronDown,
   Clock,
   Layout,
   PieChart,
   TrendingUp,
   Zap
 } from 'lucide-react-native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   RefreshControl,
   SafeAreaView,
@@ -18,29 +20,34 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Modal,
+  TextInput,
+  ActivityIndicator
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { marketApi } from '@/lib/apiClient';
+import { CryptoIcon } from '@/components/common/CryptoIcon';
 
-// Componentes (Vamos criar os arquivos na pasta components/dashboard)
+// Componentes
 import { CryptoChart } from '@/components/dashboard/CryptoChart';
 import { CustomizationModal } from '@/components/dashboard/CustomizationModal';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { TopMovers } from '@/components/dashboard/TopMovers';
-
-
-// Mock Data (Simulando a API por enquanto)
-const MOCK_STATS = [
-  { title: 'Valor do Portfólio', value: 'R$ 124.500,00', subValue: '+2.5%', icon: PieChart },
-  { title: 'Lucro Diário', value: 'R$ 1.240,00', subValue: '+1.1%', icon: Activity },
-  { title: 'Variação 24h', value: '+R$ 3.200,00', subValue: '+5.4%', icon: TrendingUp },
-];
 
 const MENU_TABS = [
   { id: 'chart', icon: BarChart2, label: 'Gráfico' },
   { id: 'markets', icon: Activity, label: 'Mercados' },
   { id: 'transactions', icon: PieChart, label: 'Transações' },
   { id: 'news', icon: Clock, label: 'Notícias' },
+];
+
+const TIME_PERIODS = [
+  { value: '1H', label: '1H', interval: '1m', limit: 60 },
+  { value: '24H', label: '24H', interval: '15m', limit: 96 },
+  { value: '1W', label: '1S', interval: '1h', limit: 168 },
+  { value: '1M', label: '1M', interval: '4h', limit: 180 },
+  { value: '1Y', label: '1A', interval: '1d', limit: 365 },
 ];
 
 export default function DashboardScreen() {
@@ -58,6 +65,146 @@ export default function DashboardScreen() {
   };
 
   const [userLayout, setUserLayout] = useState(defaultLayout);
+  
+  // Market data states
+  const [tickers, setTickers] = useState<any[]>([]);
+  const [selectedCoin, setSelectedCoin] = useState({
+    id: 'BTCUSDT',
+    name: 'BTC',
+    color: '#F7931A',
+    data: []
+  });
+  const [timeRange, setTimeRange] = useState('24H');
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [isChartLoading, setIsChartLoading] = useState(true);
+  const [isCoinSelectorOpen, setIsCoinSelectorOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [tickersLoaded, setTickersLoaded] = useState(false);
+  const chartCacheRef = useRef<Record<string, any>>({});
+
+  // Fetch tickers data
+  useEffect(() => {
+    const fetchTickers = async () => {
+      try {
+        const response = await marketApi.getAllTickers();
+        setTickers(response.data);
+        setTickersLoaded(true);
+      } catch (error) {
+        console.error('Erro ao buscar tickers:', error);
+        setTickersLoaded(true);
+      }
+    };
+
+    fetchTickers();
+    const interval = setInterval(fetchTickers, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Process crypto data
+  const processedCryptoData = useMemo(() => {
+    if (!tickers?.length) return [];
+
+    return tickers
+      .filter(ticker => ticker.symbol.endsWith('USDT'))
+      .map(ticker => ({
+        symbol: ticker.symbol,
+        name: ticker.symbol.replace('USDT', ''),
+        currentPrice: Number(ticker.lastPrice),
+        priceChange: Number(ticker.priceChangePercent),
+        volume: ticker.volume,
+        highPrice: Number(ticker.highPrice),
+        lowPrice: Number(ticker.lowPrice)
+      }));
+  }, [tickers]);
+
+  // Get top movers (gainers and losers)
+  const topMovers = useMemo(() => {
+    if (!tickers?.length) return { gainers: [], losers: [] };
+
+    const processed = tickers
+      .filter(ticker => ticker.symbol.endsWith('USDT'))
+      .map(ticker => ({
+        symbol: ticker.symbol,
+        coin: ticker.symbol.replace('USDT', ''),
+        price: parseFloat(ticker.lastPrice),
+        change: parseFloat(ticker.priceChangePercent),
+        volume: ticker.volume
+      }))
+      .filter(t => !isNaN(t.change) && !isNaN(t.price) && t.price > 0);
+
+    return {
+      gainers: processed
+        .filter(t => t.change > 0)
+        .sort((a, b) => b.change - a.change)
+        .slice(0, 5),
+      losers: processed
+        .filter(t => t.change < 0)
+        .sort((a, b) => a.change - b.change)
+        .slice(0, 5)
+    };
+  }, [tickers]);
+
+  // Fetch chart data for selected coin
+  const fetchCoinData = useCallback(async (symbol: string, showLoading = true) => {
+    try {
+      if (showLoading) setIsChartLoading(true);
+
+      const period = TIME_PERIODS.find(p => p.value === timeRange) || TIME_PERIODS[1];
+      const cacheKey = `${symbol}_${period.interval}_${period.limit}`;
+
+      // Check cache first
+      if (chartCacheRef.current[cacheKey]) {
+        setChartData(chartCacheRef.current[cacheKey]);
+        setIsChartLoading(false);
+        return;
+      }
+
+      const klinesData = await marketApi.getKlines(symbol, period.interval, period.limit);
+      
+      const formattedData = klinesData.data.map((kline: any[]) => ({
+        time: new Date(kline[0]).toLocaleString('pt-BR', { 
+          month: 'short', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        price: Number(kline[4]), // close price
+        volume: Number(kline[5]),
+        high: Number(kline[2]),
+        low: Number(kline[3]),
+        open: Number(kline[1]),
+        fullDate: new Date(kline[0]).toLocaleString('pt-BR')
+      }));
+
+      chartCacheRef.current[cacheKey] = formattedData;
+      setChartData(formattedData);
+    } catch (error) {
+      console.error('Erro ao buscar dados da moeda:', error);
+    } finally {
+      setIsChartLoading(false);
+    }
+  }, [timeRange]);
+
+  // Initialize with first coin
+  useEffect(() => {
+    if (processedCryptoData.length > 0 && !chartData.length) {
+      const firstCoin = processedCryptoData[0];
+      setSelectedCoin({
+        id: firstCoin.symbol,
+        name: firstCoin.name,
+        color: '#F7931A',
+        data: []
+      });
+      fetchCoinData(firstCoin.symbol);
+    }
+  }, [processedCryptoData, fetchCoinData, chartData.length]);
+
+  // Update chart when time range changes
+  useEffect(() => {
+    if (selectedCoin?.id) {
+      fetchCoinData(selectedCoin.id, false);
+    }
+  }, [timeRange, selectedCoin?.id, fetchCoinData]);
 
   // Carregar layout salvo
   useEffect(() => {
@@ -104,10 +251,67 @@ export default function DashboardScreen() {
     return userLayout[section as keyof typeof userLayout]?.includes(component);
   };
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 2000);
-  }, []);
+    try {
+      // Refresh tickers
+      const response = await marketApi.getAllTickers();
+      setTickers(response.data);
+      
+      // Refresh current coin data
+      if (selectedCoin?.id) {
+        await fetchCoinData(selectedCoin.id, false);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedCoin?.id, fetchCoinData]);
+
+  const handleCoinSelection = useCallback((coin: any) => {
+    setSelectedCoin({
+      id: coin.symbol,
+      name: coin.name,
+      color: coin.name === 'BTC' ? '#F7931A' : coin.name === 'ETH' ? '#627EEA' : '#F7931A',
+      data: []
+    });
+    setIsCoinSelectorOpen(false);
+    fetchCoinData(coin.symbol);
+  }, [fetchCoinData]);
+
+  const filteredCoins = useMemo(() => {
+    if (!searchTerm) return processedCryptoData.slice(0, 20);
+    return processedCryptoData.filter(coin =>
+      coin.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ).slice(0, 20);
+  }, [processedCryptoData, searchTerm]);
+
+  // Calculate stats from real data
+  const stats = useMemo(() => {
+    const selectedTicker = tickers.find(t => t.symbol === selectedCoin.id);
+    
+    return [
+      { 
+        title: 'Preço Atual', 
+        value: selectedTicker ? `R$ ${Number(selectedTicker.lastPrice).toLocaleString('pt-BR')}` : 'R$ 0,00',
+        subValue: selectedTicker ? `${Number(selectedTicker.priceChangePercent).toFixed(2)}%` : '0%',
+        icon: PieChart 
+      },
+      { 
+        title: 'Volume 24h', 
+        value: selectedTicker ? `R$ ${(Number(selectedTicker.volume) / 1000000).toFixed(2)}M` : 'R$ 0',
+        subValue: 'Volume', 
+        icon: Activity 
+      },
+      { 
+        title: 'Variação 24h', 
+        value: selectedTicker ? `${Number(selectedTicker.priceChangePercent) > 0 ? '+' : ''}${Number(selectedTicker.priceChangePercent).toFixed(2)}%` : '0%',
+        subValue: selectedTicker ? `R$ ${Number(selectedTicker.priceChange).toLocaleString('pt-BR')}` : 'R$ 0',
+        icon: TrendingUp 
+      },
+    ];
+  }, [tickers, selectedCoin.id]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -148,16 +352,10 @@ export default function DashboardScreen() {
 
         {/* 2. STATS CARDS */}
         <View style={styles.section}>
-          <StatsCards 
-            stats={MOCK_STATS.filter((_, idx) => {
-              // Lógica simples para filtrar stats baseado no layout (adaptar conforme nomes reais)
-              const keys = ['portfolioValue', 'dailyProfit', '24hChange'];
-              return isVisible('middleSection', keys[idx]);
-            })} 
-          />
+          <StatsCards stats={stats} />
         </View>
 
-        {/* 3. TENDÊNCIAS & DICAS */}
+        {/* 4. TENDÊNCIAS & DICAS */}
         {(isVisible('topSection', 'trendingCoins') || isVisible('topSection', 'tradingTips')) && (
           <Animated.View
             entering={FadeInDown.delay(100).duration(500)}
@@ -170,15 +368,29 @@ export default function DashboardScreen() {
                   <TrendingUp size={20} color="#F7931A" style={styles.icon} />
                   <Text style={styles.cardTitle}>Tendências</Text>
                 </View>
-                {/* Simulação de lista horizontal */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-                  {['BTC', 'ETH', 'SOL'].map(coin => (
-                    <View key={coin} style={styles.trendItem}>
-                      <Text style={styles.trendSymbol}>{coin}</Text>
-                      <Text style={styles.trendChange}>+5.2%</Text>
-                    </View>
-                  ))}
-                </ScrollView>
+                {tickersLoaded ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                    {topMovers.gainers.slice(0, 5).map(coin => (
+                      <View key={coin.symbol} style={styles.trendItem}>
+                        <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                          <CryptoIcon symbol={coin.coin} size={28} />
+                        </View>
+                        <Text style={styles.trendSymbol}>{coin.coin}</Text>
+                        <View style={styles.trendChangeRow}>
+                          <ArrowUpRight size={12} color="#10B981" />
+                          <Text style={[styles.trendChange, { color: '#10B981' }]}>
+                            {coin.change.toFixed(2)}%
+                          </Text>
+                        </View>
+                        <Text style={styles.trendPrice}>
+                          R$ {coin.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <ActivityIndicator size="small" color="#F7931A" style={{ marginVertical: 20 }} />
+                )}
               </View>
             )}
 
@@ -197,7 +409,7 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
-        {/* 4. NAVEGAÇÃO INTERNA */}
+        {/* 5. NAVEGAÇÃO INTERNA */}
         <View style={styles.tabsContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {MENU_TABS.map((tab) => {
@@ -219,17 +431,107 @@ export default function DashboardScreen() {
           </ScrollView>
         </View>
 
-        {/* 5. CONTEÚDO PRINCIPAL */}
+        {/* 6. CONTEÚDO PRINCIPAL */}
         <Animated.View entering={FadeInDown.delay(200).duration(500)}>
           {activeTab === 'chart' && isVisible('mainContent', 'chart') && (
-            <View style={styles.chartContainer}>
-              <CryptoChart />
-            </View>
+            <>
+              {/* Coin Selector */}
+              <TouchableOpacity 
+                style={styles.coinSelectorCard}
+                onPress={() => setIsCoinSelectorOpen(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.coinSelectorLeft}>
+                  <CryptoIcon symbol={selectedCoin.name} size={40} />
+                  <View style={{ marginLeft: 12 }}>
+                    <Text style={styles.coinSelectorName}>{selectedCoin.name}</Text>
+                    <Text style={styles.coinSelectorSymbol}>{selectedCoin.id.replace('USDT', '')}/USDT</Text>
+                  </View>
+                </View>
+                <View style={styles.coinSelectorRight}>
+                  <Text style={styles.coinSelectorPrice}>
+                    R$ {(tickers.find(t => t.symbol === selectedCoin.id)?.lastPrice || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                  <Text style={[styles.coinSelectorChange, { color: (Number(tickers.find(t => t.symbol === selectedCoin.id)?.priceChangePercent) || 0) >= 0 ? '#10B981' : '#EF4444' }]}>
+                    {(Number(tickers.find(t => t.symbol === selectedCoin.id)?.priceChangePercent) || 0) >= 0 ? '+' : ''}{(Number(tickers.find(t => t.symbol === selectedCoin.id)?.priceChangePercent) || 0).toFixed(2)}%
+                  </Text>
+                </View>
+                <ChevronDown size={20} color="#6B7280" style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
+
+              {/* Time Range Selector */}
+              <View style={styles.timeRangeContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {TIME_PERIODS.map(period => (
+                    <TouchableOpacity
+                      key={period.value}
+                      style={[
+                        styles.timeButton,
+                        timeRange === period.value && styles.timeButtonActive
+                      ]}
+                      onPress={() => setTimeRange(period.value)}
+                    >
+                      <Text style={[
+                        styles.timeButtonText,
+                        timeRange === period.value && styles.timeButtonTextActive
+                      ]}>
+                        {period.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Chart */}
+              <View style={styles.chartContainer}>
+                <CryptoChart 
+                  data={chartData}
+                  isLoading={isChartLoading}
+                  color={selectedCoin.color}
+                  height={250}
+                />
+              </View>
+            </>
           )}
           
-          {activeTab === 'chart' && isVisible('mainContent', 'topGainers') && (
+          {activeTab === 'markets' && (
+            <View style={styles.marketContainer}>
+              <Text style={styles.marketTitle}>Visão Geral do Mercado</Text>
+              {processedCryptoData.slice(0, 10).map((coin) => (
+                <TouchableOpacity
+                  key={coin.symbol}
+                  style={styles.marketItem}
+                  onPress={() => handleCoinSelection(coin)}
+                >
+                  <View style={styles.marketItemLeft}>
+                    <CryptoIcon symbol={coin.name} size={36} />
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text style={styles.marketCoinName}>{coin.name}</Text>
+                      <Text style={styles.marketCoinPrice}>
+                        R$ {coin.currentPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[
+                    styles.marketCoinChange,
+                    { color: coin.priceChange >= 0 ? '#10B981' : '#EF4444' }
+                  ]}>
+                    {coin.priceChange >= 0 ? '+' : ''}{coin.priceChange.toFixed(2)}%
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {activeTab === 'chart' && isVisible('mainContent', 'topGainers') && tickersLoaded && (
             <View style={{ marginTop: 16 }}>
-              <TopMovers />
+              <TopMovers data={topMovers.gainers} type="gainers" />
+            </View>
+          )}
+
+          {activeTab === 'chart' && isVisible('mainContent', 'topLosers') && tickersLoaded && (
+            <View style={{ marginTop: 16 }}>
+              <TopMovers data={topMovers.losers} type="losers" />
             </View>
           )}
         </Animated.View>
@@ -246,6 +548,62 @@ export default function DashboardScreen() {
         onReset={resetLayout}
         onSave={saveLayout}
       />
+
+      {/* Coin Selector Modal */}
+      <Modal
+        visible={isCoinSelectorOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCoinSelectorOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Selecionar Moeda</Text>
+              <TouchableOpacity onPress={() => setIsCoinSelectorOpen(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar moeda..."
+              placeholderTextColor="#9CA3AF"
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+            />
+
+            <ScrollView style={styles.coinList}>
+              {filteredCoins.map((coin) => (
+                <TouchableOpacity
+                  key={coin.symbol}
+                  style={styles.coinItem}
+                  onPress={() => handleCoinSelection(coin)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <CryptoIcon symbol={coin.name} size={36} />
+                    <View style={{ marginLeft: 12 }}>
+                      <Text style={styles.coinItemName}>{coin.name}</Text>
+                      <Text style={styles.coinItemSymbol}>{coin.symbol}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.coinItemRight}>
+                    <Text style={styles.coinItemPrice}>
+                      R$ {coin.currentPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </Text>
+                    <Text style={[
+                      styles.coinItemChange,
+                      { color: coin.priceChange >= 0 ? '#10B981' : '#EF4444' }
+                    ]}>
+                      {coin.priceChange >= 0 ? '+' : ''}{coin.priceChange.toFixed(2)}%
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -348,16 +706,199 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#374151',
+    marginBottom: 4,
+  },
+  trendChangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
   },
   trendChange: {
     fontSize: 12,
-    color: '#10B981',
     fontWeight: '600',
+    marginLeft: 2,
+  },
+  trendPrice: {
+    fontSize: 11,
+    color: '#6B7280',
   },
   tipText: {
     fontSize: 14,
     color: '#6B7280',
     fontStyle: 'italic',
+  },
+  coinSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  coinSelectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  coinSelectorName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  coinSelectorSymbol: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  coinSelectorRight: {
+    alignItems: 'flex-end',
+  },
+  coinSelectorPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  coinSelectorChange: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  timeRangeContainer: {
+    marginBottom: 12,
+  },
+  timeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#E5E7EB',
+    marginRight: 8,
+  },
+  timeButtonActive: {
+    backgroundColor: '#F7931A',
+  },
+  timeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  timeButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  marketContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  marketTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  marketItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  marketItemLeft: {
+    flex: 1,
+  },
+  marketCoinName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  marketCoinPrice: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  marketCoinChange: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  modalClose: {
+    fontSize: 24,
+    color: '#6B7280',
+    fontWeight: 'bold',
+  },
+  searchInput: {
+    backgroundColor: '#F3F4F6',
+    padding: 12,
+    borderRadius: 12,
+    fontSize: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  coinList: {
+    maxHeight: 400,
+  },
+  coinItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  coinItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  coinItemSymbol: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  coinItemRight: {
+    alignItems: 'flex-end',
+  },
+  coinItemPrice: {
+    fontSize: 14,
+    color: '#111827',
+    marginBottom: 2,
+  },
+  coinItemChange: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   tabsContainer: {
     marginBottom: 20,

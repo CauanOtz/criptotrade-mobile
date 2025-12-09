@@ -24,6 +24,7 @@ import Animated, {
   FadeIn
 } from 'react-native-reanimated';
 import { Mail, Lock, ArrowRight, Bitcoin, DollarSign, Wallet, Chrome, Facebook, Github, Shield, CircleDollarSign } from 'lucide-react-native';
+import MfaVerification from '@/components/MfaVerification';
 
 const { width, height } = Dimensions.get('window');
 
@@ -33,6 +34,7 @@ export default function LoginScreen() {
   const [loginMethod, setLoginMethod] = useState<'email' | 'wallet'>('email');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mfaPending, setMfaPending] = useState<any>(null);
   const router = useRouter();
   const { signIn, user } = useAuth();
 
@@ -51,10 +53,18 @@ export default function LoginScreen() {
 
       setLoading(true);
       setError('');
-      const { error } = await signIn(email, password);
+      const { error, data } = await signIn(email, password);
 
       if (error) {
         setError(error.message);
+        setLoading(false);
+      } else if (data?.mfaRequired) {
+        // Se MFA for necessário, mostrar tela de verificação
+        setMfaPending({
+          tempToken: data.tempToken,
+          userInfo: data.userInfo,
+          isFirstLogin: data.isFirstLogin
+        });
         setLoading(false);
       }
     } else {
@@ -67,6 +77,30 @@ export default function LoginScreen() {
       }, 1500);
     }
   };
+
+  const handleMfaSuccess = (userInfo: any, isFirstLogin: boolean) => {
+    setMfaPending(null);
+    // Redirecionar após sucesso do MFA
+    router.replace('/(tabs)');
+  };
+
+  const handleMfaCancel = () => {
+    setMfaPending(null);
+    setEmail('');
+    setPassword('');
+    setError('');
+  };
+
+  // Se houver MFA pendente, mostrar tela de verificação
+  if (mfaPending) {
+    return (
+      <MfaVerification
+        mfaPending={mfaPending}
+        onCancel={handleMfaCancel}
+        onSuccess={handleMfaSuccess}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>

@@ -32,6 +32,10 @@ export default function ProfileScreen() {
     router.replace('/login');
   };
 
+  const handleSettingsNavigation = (path: string) => {
+    router.push(path as any);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F3F4F6" />
@@ -62,20 +66,37 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Configurações</Text>
 
           <MenuItem
-            icon={<Settings size={22} color="#F7931A" />}
-            title="Configurações Gerais"
-            onPress={() => {}}
+            icon={<User size={22} color="#6366F1" />}
+            title="Perfil"
+            onPress={() => handleSettingsNavigation('/settings/profile')}
           />
           <MenuItem
-            icon={<Bell size={22} color="#F7931A" />}
-            title="Notificações"
-            onPress={() => {}}
+            icon={<Settings size={22} color="#0EA5E9" />}
+            title="Usabilidade"
+            onPress={() => handleSettingsNavigation('/settings/usability')}
           />
           <MenuItem
-            icon={<Shield size={22} color="#F7931A" />}
+            icon={<Bell size={22} color="#F59E0B" />}
+            title="Notificações de Preço"
+            onPress={() => handleSettingsNavigation('/settings/price-notifications')}
+          />
+          <MenuItem
+            icon={<Shield size={22} color="#10B981" />}
             title="Segurança"
-            onPress={() => {}}
+            onPress={() => handleSettingsNavigation('/settings/security')}
           />
+          <MenuItem
+            icon={<Coins size={22} color="#F43F5E" />}
+            title="Preferências de Moeda"
+            onPress={() => handleSettingsNavigation('/settings/currency-preferences')}
+          />
+          
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            onPress={() => router.push('/settings')}
+          >
+            <Text style={styles.viewAllText}>Ver Todas as Configurações</Text>
+          </TouchableOpacity>
         </View>
 
         {isAdmin && (
@@ -301,5 +322,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
+  },
+  viewAllButton: {
+    marginTop: 12,
+    backgroundColor: '#F7931A',
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  viewAllText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

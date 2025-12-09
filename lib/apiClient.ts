@@ -4,6 +4,7 @@ export const authApi = {
   login: (credentials: any) => api.post('/auth/login', credentials),
   register: (userData: any) => api.post('/user', userData),
   verifyToken: () => api.get('/auth/verify'),
+  verifyMfa: (payload: any) => api.post('/auth/verify-mfa', payload),
 };
 
 export const userApi = {
@@ -52,6 +53,9 @@ export const walletApi = {
 
 export const wallet2Api = {
   getBalances: () => api.get('/balance'),
+  getSummary: () => api.get('/balance/summary'),
+  getAssetLots: (assetSymbol: string, method = 'fifo') => 
+    api.get(`/balance/asset/${assetSymbol}/lots`, { params: { method } }),
   adjustBalance: (assetSymbol: string, deltaAmount: number) =>
     api.patch(`/balance/${encodeURIComponent(assetSymbol)}`, { DeltaAmount: deltaAmount }),
   createWallet: () => api.post('/wallet'),
@@ -63,6 +67,11 @@ export const transactionApi = {
   create: (data: any) => api.post('/transactions', data),
   getById: (id: string) => api.get(`/transactions/${id}`),
   update: (id: string, data: any) => api.put(`/transactions/${id}`, data),
+  buy: (data: any) => api.post('/transactions/buy', data),
+  sell: (data: any) => api.post('/transactions/sell', data),
+  swap: (data: any) => api.post('/transactions/swap', data),
+  depositFiat: (data: any) => api.post('/transactions/deposit/fiat', data),
+  withdrawFiat: (data: any) => api.post('/transactions/withdraw/fiat', data),
 };
 
 export const settingsApi = {

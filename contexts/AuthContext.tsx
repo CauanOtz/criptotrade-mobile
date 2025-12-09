@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { login, register, logout as serviceLogout, getProfileByEmail } from '@/lib/authService';
+import { login, register, logout as serviceLogout, getProfileByEmail, verifyMfa as serviceVerifyMfa } from '@/lib/authService';
 
 type AuthContextType = {
   user: any | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>; 
+  signIn: (email: string, password: string) => Promise<{ error: any; data?: any }>; 
   signUp: (email: string, password: string, name?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  verifyMfa: (code: string, tokenOrUserId?: any, email?: string) => Promise<{ error: any; user?: any }>;
   biometryAvailable: boolean;
   biometryEnabled: boolean;
   enableBiometry: (enabled: boolean) => Promise<boolean>;
@@ -21,9 +22,10 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  signIn: async () => ({ error: null }),
+  signIn: async () => ({ error: null, data: undefined }),
   signUp: async () => ({ error: null }),
   signOut: async () => {},
+  verifyMfa: async () => ({ error: null, user: undefined }),
   biometryAvailable: false,
   biometryEnabled: false,
   enableBiometry: async () => false,
@@ -76,11 +78,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { user: profile } = await login({ email, password });
-      setUser(profile ?? null);
-      return { error: null };
+      const res = await login({ email, password });
+
+      // If backend requested MFA, forward the MFA payload to the caller
+      if (res?.mfaRequired) {
+        return { error: null, data: res };
+      }
+
+      // Successful login returned token (authService already stored token).
+      // If a user profile was returned, set it in context
+      if (res?.user) {
+        setUser(res.user);
+      }
+
+      return { error: null, data: { mfaRequired: false } };
     } catch (error: any) {
-      return { error };
+      return { error, data: undefined };
+    }
+  };
+
+  const verifyMfa = async (code: string, tokenOrUserId: any, email?: string) => {
+    try {
+      let payload: any = { code };
+      if (tokenOrUserId) {
+        if (typeof tokenOrUserId === 'string' && tokenOrUserId.includes('.')) {
+          payload.tempToken = tokenOrUserId;
+        } else if (typeof tokenOrUserId === 'number' || /^[0-9]+$/.test(String(tokenOrUserId))) {
+          payload.userId = tokenOrUserId;
+        } else {
+          payload.tempToken = tokenOrUserId;
+        }
+      }
+
+      const result = await serviceVerifyMfa(payload);
+      if (result?.user) {
+        setUser(result.user);
+        try {
+          await SecureStore.setItemAsync('user', JSON.stringify(result.user));
+        } catch (e) {
+          // ignore
+        }
+        return { error: null, user: result.user };
+      }
+
+      if (email) {
+        try {
+          const profile = await getProfileByEmail(email);
+          if (profile) {
+            setUser(profile);
+            try {
+              await SecureStore.setItemAsync('user', JSON.stringify(profile));
+            } catch (e) {
+              // ignore
+            }
+            return { error: null, user: profile };
+          }
+        } catch (e) {
+        }
+      }
+
+      return { error: null, user: undefined };
+    } catch (error: any) {
+      return { error, user: undefined };
     }
   };
 
@@ -247,6 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signOut,
+        verifyMfa,
         biometryAvailable,
         biometryEnabled,
         enableBiometry,

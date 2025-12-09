@@ -1,14 +1,43 @@
 import { Tabs } from 'expo-router';
 import { LayoutDashboard, Wallet, TrendingUp, Grid } from 'lucide-react-native';
 import { StyleSheet, View, Text, Platform } from 'react-native';
+import Animated, { 
+  useAnimatedStyle, 
+  withSpring, 
+  interpolate,
+  Extrapolate 
+} from 'react-native-reanimated';
 
 export default function TabLayout() {
-  const renderIcon = (Icon: any, label: string) => ({ focused }: { focused: boolean }) => (
-    <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-      <Icon size={24} color={focused ? '#FFF' : '#9CA3AF'} />
-      {focused && <Text style={styles.tabLabel}>{label}</Text>}
-    </View>
-  );
+  const renderIcon = (Icon: any, label: string) => ({ focused }: { focused: boolean }) => {
+    const animatedStyle = useAnimatedStyle(() => {
+      const scale = withSpring(focused ? 1 : 0.9, {
+        damping: 15,
+        stiffness: 150,
+      });
+      
+      return {
+        transform: [{ scale }],
+      };
+    });
+
+    return (
+      <Animated.View style={[styles.tabItem, focused && styles.tabItemActive, animatedStyle]}>
+        <View style={[styles.iconWrapper, focused && styles.iconWrapperActive]}>
+          <Icon 
+            size={focused ? 22 : 20} 
+            color={focused ? '#FFFFFF' : '#6B7280'} 
+            strokeWidth={focused ? 2.5 : 2}
+          />
+        </View>
+        {focused && (
+          <Text style={styles.tabLabel} numberOfLines={1}>
+            {label}
+          </Text>
+        )}
+      </Animated.View>
+    );
+  };
 
   return (
     <Tabs
@@ -16,7 +45,9 @@ export default function TabLayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: styles.tabBarStyle,
-        // Removido background complexo para evitar bugs de transparência
+        tabBarItemStyle: styles.tabBarItemStyle,
+        tabBarActiveTintColor: '#F7931A',
+        tabBarInactiveTintColor: '#6B7280',
       }}
     >
       {/* 1. Início */}
@@ -69,34 +100,67 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarStyle: {
     position: 'absolute',
-    bottom: 20,
-    height: 64,
-    left: 20,
-    right: 20,
+    bottom: Platform.OS === 'ios' ? 25 : 20,
+    height: Platform.OS === 'ios' ? 72 : 68,
+    left: 16,
+    right: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 24,
     borderTopWidth: 0,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 8,
+    paddingHorizontal: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  tabBarItemStyle: {
+    paddingVertical: 4,
   },
   tabItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 30,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    gap: 6,
+    minWidth: 50,
   },
   tabItemActive: {
     backgroundColor: '#F7931A',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#F7931A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  iconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapperActive: {
   },
   tabLabel: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 6,
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

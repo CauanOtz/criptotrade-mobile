@@ -11,13 +11,13 @@ import {
   ActivityIndicator,
   StatusBar
 } from 'react-native';
-// Remove LinearGradient do dark mode
-import { CryptoCard } from '@/components/CryptoCard'; // Certifique-se de que CryptoCard também suporte light mode ou crie uma versão local
-import { Search } from 'lucide-react-native';
+import { CryptoIcon } from '@/components/common/CryptoIcon';
+import { Search, Star } from 'lucide-react-native';
 import { Crypto } from '@/types/crypto';
 import { marketApi } from '@/lib/apiClient';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ... (Manter constantes quoteSuffixes, usdPeggedQuotes, etc.) ...
 const quoteSuffixes = ['USDT', 'USDC', 'BUSD', 'BTC', 'ETH', 'BRL', 'USD'];
 const stableQuotes = ['USDT', 'USDC', 'BUSD', 'USD'];
 
@@ -28,21 +28,130 @@ const quoteOptions = [
   { label: 'Stable', value: 'STABLE' },
 ];
 
+// Extract base symbol and quote from ticker symbol
+const parseSymbol = (symbol: string) => {
+  for (const quote of quoteSuffixes) {
+    if (symbol.endsWith(quote)) {
+      return {
+        base: symbol.slice(0, -quote.length),
+        quote: quote,
+      };
+    }
+  }
+  return { base: symbol, quote: '' };
+};
+
 export default function MarketScreen() {
-  const [cryptos, setCryptos] = useState<Crypto[]>([]);
+  const [tickers, setTickers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [quoteFilter, setQuoteFilter] = useState('ALL');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
 
-  // ... (Manter lógica de fetchMarket, onRefresh, filteredCryptos) ...
-  // Simplificando a lógica para focar no layout:
-  
+  // Load favorites from storage
   useEffect(() => {
-    // Simulação de carga
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1000);
+    const loadFavorites = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('market_favorites');
+        if (stored) {
+          setFavorites(JSON.parse(stored));
+        }
+      } catch (error) {
+        console.error('Failed to load favorites:', error);
+      }
+    };
+    loadFavorites();
   }, []);
+
+  // Fetch tickers from API
+  const fetchMarket = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await marketApi.getAllTickers();
+      setTickers(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch tickers:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMarket();
+  }, [fetchMarket]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchMarket();
+    setRefreshing(false);
+  }, [fetchMarket]);
+
+  // Toggle favorite
+  const toggleFavorite = useCallback(async (symbol: string) => {
+    const newFavorites = favorites.includes(symbol)
+      ? favorites.filter(f => f !== symbol)
+      : [...favorites, symbol];
+    
+    setFavorites(newFavorites);
+    try {
+      await AsyncStorage.setItem('market_favorites', JSON.stringify(newFavorites));
+    } catch (error) {
+      console.error('Failed to save favorites:', error);
+    }
+  }, [favorites]);
+
+  // Process and filter tickers
+  const processedMarketData = useMemo(() => {
+    return tickers.map((ticker: any) => {
+      const { base, quote } = parseSymbol(ticker.symbol || '');
+      return {
+        id: base,
+        name: base,
+        symbol: ticker.symbol || '',
+        quote: quote,
+        price: parseFloat(ticker.lastPrice || '0'),
+        change: parseFloat(ticker.priceChangePercent || '0'),
+        volume: parseFloat(ticker.volume || '0'),
+        marketCap: parseFloat(ticker.quoteVolume || '0'),
+      };
+    });
+  }, [tickers]);
+
+  // Filter by search, quote, and favorites
+  const filteredData = useMemo(() => {
+    let filtered = processedMarketData;
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter(coin => 
+        coin.name.toLowerCase().includes(searchLower) ||
+        coin.symbol.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Quote filter
+    if (quoteFilter !== 'ALL') {
+      if (quoteFilter === 'STABLE') {
+        filtered = filtered.filter(coin => stableQuotes.includes(coin.quote));
+      } else {
+        filtered = filtered.filter(coin => coin.quote === quoteFilter);
+      }
+    }
+
+    // Sort by market cap desc
+    return filtered.sort((a, b) => b.marketCap - a.marketCap);
+  }, [processedMarketData, search, quoteFilter]);
+
+  // Separate favorites and regular coins
+  const favoritesData = useMemo(() => 
+    filteredData.filter(coin => favorites.includes(coin.symbol))
+  , [filteredData, favorites]);
+
+  const regularData = useMemo(() => 
+    filteredData.filter(coin => !favorites.includes(coin.symbol))
+  , [filteredData, favorites]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -52,6 +161,14 @@ export default function MarketScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#F7931A"
+            colors={['#F7931A']}
+          />
+        }
       >
         <View style={styles.header}>
           <View>
@@ -96,31 +213,104 @@ export default function MarketScreen() {
           </ScrollView>
         </View>
 
-        <View style={styles.marketListHeader}>
-          <Text style={styles.sectionTitle}>Lista completa</Text>
-        </View>
-
-        {loading ? (
+        {loading && !refreshing ? (
           <ActivityIndicator color="#F7931A" size="large" style={{marginTop: 40}} />
         ) : (
-          <View style={{gap: 12}}>
-             {/* Exemplo de card de item de lista manual se CryptoCard for dark */}
-             {[1,2,3,4,5].map(i => (
-                <View key={i} style={styles.cryptoItem}>
-                   <View style={styles.cryptoLeft}>
-                      <View style={styles.cryptoIcon} />
-                      <View>
-                         <Text style={styles.cryptoSymbol}>BTC/USDT</Text>
-                         <Text style={styles.cryptoName}>Bitcoin</Text>
-                      </View>
-                   </View>
-                   <View style={styles.cryptoRight}>
-                      <Text style={styles.cryptoPrice}>$92,430.00</Text>
-                      <Text style={{color: '#10B981', fontSize: 12}}>+2.4%</Text>
-                   </View>
+          <>
+            {favoritesData.length > 0 && (
+              <>
+                <View style={styles.marketListHeader}>
+                  <Text style={styles.sectionTitle}>⭐ Favoritos</Text>
                 </View>
-             ))}
-          </View>
+                <View style={{gap: 12, marginBottom: 24}}>
+                  {favoritesData.map((coin) => (
+                    <TouchableOpacity
+                      key={coin.symbol}
+                      style={styles.cryptoItem}
+                      onPress={() => router.push(`/coin/${coin.symbol}`)}
+                    >
+                      <View style={styles.cryptoLeft}>
+                        <CryptoIcon symbol={coin.id} size={40} />
+                        <View>
+                          <Text style={styles.cryptoSymbol}>{coin.symbol}</Text>
+                          <Text style={styles.cryptoName}>Vol: ${(coin.volume / 1000000).toFixed(1)}M</Text>
+                        </View>
+                      </View>
+                      <View style={styles.cryptoRight}>
+                        <Text style={styles.cryptoPrice}>
+                          ${coin.price < 1 
+                            ? coin.price.toFixed(6) 
+                            : coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          }
+                        </Text>
+                        <Text style={{color: coin.change >= 0 ? '#10B981' : '#EF4444', fontSize: 12, fontWeight: '600'}}>
+                          {coin.change >= 0 ? '+' : ''}{coin.change.toFixed(2)}%
+                        </Text>
+                      </View>
+                      <TouchableOpacity 
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(coin.symbol);
+                        }}
+                        style={styles.favoriteButton}
+                      >
+                        <Star 
+                          size={20} 
+                          color="#F7931A" 
+                          fill={favorites.includes(coin.symbol) ? "#F7931A" : "transparent"}
+                        />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
+            <View style={styles.marketListHeader}>
+              <Text style={styles.sectionTitle}>Lista completa ({regularData.length})</Text>
+            </View>
+            <View style={{gap: 12}}>
+              {regularData.slice(0, 50).map((coin) => (
+                <TouchableOpacity
+                  key={coin.symbol}
+                  style={styles.cryptoItem}
+                  onPress={() => router.push(`/coin/${coin.symbol}`)}
+                >
+                  <View style={styles.cryptoLeft}>
+                    <CryptoIcon symbol={coin.id} size={40} />
+                    <View>
+                      <Text style={styles.cryptoSymbol}>{coin.symbol}</Text>
+                      <Text style={styles.cryptoName}>Vol: ${(coin.volume / 1000000).toFixed(1)}M</Text>
+                    </View>
+                  </View>
+                  <View style={styles.cryptoRight}>
+                    <Text style={styles.cryptoPrice}>
+                      ${coin.price < 1 
+                        ? coin.price.toFixed(6) 
+                        : coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      }
+                    </Text>
+                    <Text style={{color: coin.change >= 0 ? '#10B981' : '#EF4444', fontSize: 12, fontWeight: '600'}}>
+                      {coin.change >= 0 ? '+' : ''}{coin.change.toFixed(2)}%
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(coin.symbol);
+                    }}
+                    style={styles.favoriteButton}
+                  >
+                    <Star 
+                      size={20} 
+                      color="#D1D5DB" 
+                      fill="transparent"
+                    />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
         )}
 
         <View style={{ height: 100 }} />
@@ -253,13 +443,7 @@ const styles = StyleSheet.create({
   cryptoLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  cryptoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    marginRight: 12,
+    gap: 12,
   },
   cryptoSymbol: {
     fontSize: 16,
@@ -269,13 +453,19 @@ const styles = StyleSheet.create({
   cryptoName: {
     fontSize: 13,
     color: '#9CA3AF',
+    marginTop: 2,
   },
   cryptoRight: {
     alignItems: 'flex-end',
+    flex: 1,
   },
   cryptoPrice: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+  },
+  favoriteButton: {
+    padding: 8,
+    marginLeft: 8,
   }
 });
